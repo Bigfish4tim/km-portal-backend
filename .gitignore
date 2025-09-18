@@ -1,0 +1,63 @@
+# Spring Boot 관련
+HELP.md
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# STS (Spring Tool Suite)
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# NetBeans
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# VS Code
+.vscode/
+
+# OS 관련
+.DS_Store
+Thumbs.db
+.DS_Store?
+._*
+
+# 환경 설정 파일 (보안)
+application-prod.yml
+application-local.yml
+*.env
+.env
+.env.local
+.env.production
+
+# 로그 파일
+logs/
+*.log
+log/
+
+# 임시 파일
+*.tmp
+*.temp
+~*
+
+# Maven Wrapper는 포함 (프로젝트에 필요)
+# .mvn/
+# mvnw
+# mvnw.cmd

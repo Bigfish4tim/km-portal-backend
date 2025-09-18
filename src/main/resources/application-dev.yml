@@ -1,0 +1,20 @@
+# src/main/resources/application-dev.yml
+spring:
+  # H2 데이터베이스 설정 (개발용)
+  datasource:
+    url: jdbc:h2:mem:kmportal
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  # H2 콘솔 활성화 (브라우저에서 DB 확인 가능)
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+# CORS 설정 (프론트엔드 연동용)
+cors:
+  allowed-origins: http://localhost:8080
+  allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+  allowed-headers: "*"

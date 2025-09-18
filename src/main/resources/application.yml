@@ -1,0 +1,35 @@
+# src/main/resources/application.yml
+spring:
+  # 활성화할 프로필 (개발환경: dev, 운영환경: prod)
+  profiles:
+    active: dev
+
+  # 애플리케이션 정보
+  application:
+    name: km-portal-backend
+
+  # JPA 설정
+  jpa:
+    # 하이버네이트 DDL 설정 (개발용: create-drop, 운영용: validate)
+    hibernate:
+      ddl-auto: create-drop
+    # SQL 로그 출력 (개발 시에만 true)
+    show-sql: true
+    # SQL 포맷팅
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.SQLServerDialect
+
+# 서버 설정
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+# 로깅 설정
+logging:
+  level:
+    com.kmportal: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
