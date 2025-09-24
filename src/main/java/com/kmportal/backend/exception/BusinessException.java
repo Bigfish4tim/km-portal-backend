@@ -20,6 +20,13 @@ package com.kmportal.backend.exception;
 public class BusinessException extends RuntimeException {
 
     /**
+     * 에러 코드 (선택적)
+     * - API 응답에서 구체적인 에러 타입을 구분하기 위한 코드
+     * - 예: "USER_ALREADY_EXISTS", "INVALID_FILE_TYPE" 등
+     */
+    private final String errorCode;
+
+    /**
      * 메시지만 포함하는 기본 생성자
      *
      * @param message 예외 메시지 (사용자에게 표시될 메시지)
@@ -29,6 +36,21 @@ public class BusinessException extends RuntimeException {
      */
     public BusinessException(String message) {
         super(message);
+        this.errorCode = null;
+    }
+
+    /**
+     * 에러 코드와 메시지를 포함하는 생성자
+     *
+     * @param errorCode 에러 코드
+     * @param message 예외 메시지
+     *
+     * 사용 예시:
+     * throw new BusinessException("USER_ALREADY_EXISTS", "이미 존재하는 사용자입니다.");
+     */
+    public BusinessException(String errorCode, String message) {
+        super(message);
+        this.errorCode = errorCode;
     }
 
     /**
@@ -46,6 +68,19 @@ public class BusinessException extends RuntimeException {
      */
     public BusinessException(String message, Throwable cause) {
         super(message, cause);
+        this.errorCode = null;
+    }
+
+    /**
+     * 에러 코드, 메시지, 원인 예외를 모두 포함하는 생성자
+     *
+     * @param errorCode 에러 코드
+     * @param message 예외 메시지
+     * @param cause 원인이 된 예외
+     */
+    public BusinessException(String errorCode, String message, Throwable cause) {
+        super(message, cause);
+        this.errorCode = errorCode;
     }
 
     /**
@@ -58,6 +93,25 @@ public class BusinessException extends RuntimeException {
      */
     public BusinessException(Throwable cause) {
         super(cause);
+        this.errorCode = null;
+    }
+
+    /**
+     * 에러 코드 반환
+     *
+     * @return 에러 코드 (없으면 null)
+     */
+    public String getErrorCode() {
+        return errorCode;
+    }
+
+    /**
+     * 에러 코드 존재 여부 확인
+     *
+     * @return 에러 코드가 있으면 true
+     */
+    public boolean hasErrorCode() {
+        return errorCode != null && !errorCode.trim().isEmpty();
     }
 }
 
@@ -81,7 +135,7 @@ class AuthException extends BusinessException {
      * @param message 인증 관련 오류 메시지
      */
     public AuthException(String message) {
-        super(message);
+        super("AUTH_ERROR", message);
     }
 
     /**
@@ -91,7 +145,17 @@ class AuthException extends BusinessException {
      * @param cause 원인이 된 예외
      */
     public AuthException(String message, Throwable cause) {
-        super(message, cause);
+        super("AUTH_ERROR", message, cause);
+    }
+
+    /**
+     * 커스텀 에러 코드와 함께 인증 예외 생성
+     *
+     * @param errorCode 커스텀 에러 코드
+     * @param message 인증 관련 오류 메시지
+     */
+    public AuthException(String errorCode, String message) {
+        super(errorCode, message);
     }
 }
 
@@ -114,7 +178,7 @@ class FileException extends BusinessException {
      * @param message 파일 관련 오류 메시지
      */
     public FileException(String message) {
-        super(message);
+        super("FILE_ERROR", message);
     }
 
     /**
@@ -124,7 +188,17 @@ class FileException extends BusinessException {
      * @param cause 원인이 된 예외 (보통 IOException)
      */
     public FileException(String message, Throwable cause) {
-        super(message, cause);
+        super("FILE_ERROR", message, cause);
+    }
+
+    /**
+     * 커스텀 에러 코드와 함께 파일 예외 생성
+     *
+     * @param errorCode 커스텀 에러 코드
+     * @param message 파일 관련 오류 메시지
+     */
+    public FileException(String errorCode, String message) {
+        super(errorCode, message);
     }
 }
 
@@ -146,7 +220,7 @@ class ValidationException extends BusinessException {
      * @param message 검증 관련 오류 메시지
      */
     public ValidationException(String message) {
-        super(message);
+        super("VALIDATION_ERROR", message);
     }
 
     /**
@@ -157,8 +231,9 @@ class ValidationException extends BusinessException {
      * @param constraint 위반된 제약 조건
      */
     public ValidationException(String fieldName, Object value, String constraint) {
-        super(String.format("필드 '%s'의 값 '%s'이(가) 제약 조건을 위반했습니다: %s",
-                fieldName, value, constraint));
+        super("FIELD_VALIDATION_ERROR",
+                String.format("필드 '%s'의 값 '%s'이(가) 제약 조건을 위반했습니다: %s",
+                        fieldName, value, constraint));
     }
 }
 
