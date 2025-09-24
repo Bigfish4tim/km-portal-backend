@@ -38,6 +38,23 @@ git push origin main
 // 원격 저장소에 푸시
 
 
+# 백업 및 불러오기 #
+
+# 커밋 히스토리 확인
+git log --oneline
+
+# 특정 커밋으로 되돌리기 (변경사항 유지)
+git reset --soft [커밋 해시]
+
+# 특정 커밋으로 완전히 되돌리기 (변경사항 삭제)
+git reset --hard [커밋 해시]
+
+# 예시
+git reset --hard abc1234
+
+
 # 빌드 명령어 #
 
 .\mvnw.cmd spring-boot:run
+
+

@@ -1,198 +1,232 @@
 package com.kmportal.backend.entity;
 
-import com.kmportal.backend.entity.common.BaseEntity;
 import jakarta.persistence.*;
-import lombok.*;
+import jakarta.validation.constraints.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
- * 사용자 엔티티
- * - KM 포털 시스템의 사용자 정보를 저장하는 테이블
- * - Spring Security와 연동하여 인증/인가에 사용
- * - 약 400명의 사용자를 관리할 예정
+ * KM 포털 사용자 엔티티
  *
- * 테이블명: users (user는 일부 DB에서 예약어이므로 복수형 사용)
+ * 이 클래스는 시스템의 모든 사용자 정보를 담고 있으며,
+ * Spring Security의 UserDetails 인터페이스를 구현하여
+ * 인증 및 권한 처리에 직접 사용할 수 있습니다.
  *
- * @author KM Portal Team
- * @since 2025-09-23 (3일차)
+ * @author KM Portal Dev Team
+ * @version 1.0
+ * @since 2025-09-24
  */
-@Entity                             // JPA 엔티티 선언
-@Table(name = "users")              // 테이블명 지정
-@Getter @Setter                     // Lombok: getter/setter 자동 생성
-@NoArgsConstructor                  // Lombok: 기본 생성자 자동 생성
-@AllArgsConstructor                 // Lombok: 모든 필드 생성자 자동 생성
-@Builder                            // Lombok: 빌더 패턴 지원
-@ToString(exclude = {"password", "roles"})  // Lombok: toString (비밀번호와 역할은 제외)
-public class User extends BaseEntity {
+@Entity
+@Table(name = "users", // 테이블명을 명시적으로 지정 (user는 예약어인 경우가 많음)
+        indexes = {
+                @Index(name = "idx_user_username", columnList = "username", unique = true),
+                @Index(name = "idx_user_email", columnList = "email", unique = true),
+                @Index(name = "idx_user_department", columnList = "department"),
+                @Index(name = "idx_user_active", columnList = "is_active")
+        })
+public class User implements UserDetails {
 
     /**
-     * 사용자 ID (Primary Key)
-     * - 자동 증가되는 고유 식별자
-     * - Long 타입 사용으로 대용량 사용자 지원
+     * 사용자 고유 ID (Primary Key)
+     * GenerationType.IDENTITY: 데이터베이스의 AUTO_INCREMENT 기능 사용
      */
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)  // Auto Increment 사용
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "user_id")
     private Long userId;
 
     /**
-     * 사용자명 (로그인 ID)
-     * - 로그인시 사용되는 고유한 사용자명
-     * - 영문, 숫자, 언더스코어만 허용 예정
-     * - 중복 불허, 필수 입력
+     * 로그인 아이디 (필수, 유일값)
+     * 3-30자의 영문, 숫자, 언더스코어만 허용
      */
-    @Column(name = "username", unique = true, nullable = false, length = 50)
+    @Column(name = "username", nullable = false, unique = true, length = 30)
+    @NotBlank(message = "사용자명은 필수 입력 항목입니다.")
+    @Size(min = 3, max = 30, message = "사용자명은 3-30자 사이여야 합니다.")
+    @Pattern(regexp = "^[a-zA-Z0-9_]+$",
+            message = "사용자명은 영문, 숫자, 언더스코어만 사용할 수 있습니다.")
     private String username;
 
     /**
-     * 비밀번호
-     * - Spring Security의 PasswordEncoder로 암호화되어 저장
-     * - BCrypt 알고리즘 사용 예정
-     * - 평문으로 저장하지 않음
+     * 암호화된 비밀번호
+     * BCrypt 등으로 암호화하여 저장
      */
-    @Column(name = "password", nullable = false, length = 100)
+    @Column(name = "password", nullable = false, length = 255)
+    @NotBlank(message = "비밀번호는 필수 입력 항목입니다.")
     private String password;
 
     /**
-     * 이메일 주소
-     * - 사용자 연락 및 인증용
-     * - 중복 불허, 필수 입력
-     * - 이메일 형식 검증 필요
+     * 이메일 주소 (필수, 유일값)
      */
-    @Column(name = "email", unique = true, nullable = false, length = 100)
+    @Column(name = "email", nullable = false, unique = true, length = 100)
+    @NotBlank(message = "이메일은 필수 입력 항목입니다.")
+    @Email(message = "올바른 이메일 형식이 아닙니다.")
     private String email;
 
     /**
-     * 사용자 실명
-     * - 시스템 내 표시용 이름
-     * - 한글, 영문 모두 지원
+     * 사용자 실명 (한글명)
      */
-    @Column(name = "full_name", nullable = false, length = 100)
+    @Column(name = "full_name", nullable = false, length = 50)
+    @NotBlank(message = "성명은 필수 입력 항목입니다.")
+    @Size(max = 50, message = "성명은 50자를 초과할 수 없습니다.")
     private String fullName;
 
     /**
-     * 부서명
-     * - 사용자가 소속된 부서
-     * - 권한 관리 및 필터링에 사용
+     * 소속 부서명
      */
     @Column(name = "department", length = 100)
+    @Size(max = 100, message = "부서명은 100자를 초과할 수 없습니다.")
     private String department;
 
     /**
      * 직급/직책
-     * - 사용자의 직급 정보
-     * - 권한 레벨 결정에 참고
      */
     @Column(name = "position", length = 50)
+    @Size(max = 50, message = "직책은 50자를 초과할 수 없습니다.")
     private String position;
 
     /**
-     * 전화번호
-     * - 연락처 정보
-     * - 선택 입력
+     * 연락처 (휴대폰 번호)
      */
     @Column(name = "phone_number", length = 20)
+    @Pattern(regexp = "^[0-9\\-+()\\s]*$",
+            message = "연락처는 숫자, 하이픈, 괄호, 플러스 기호만 사용할 수 있습니다.")
     private String phoneNumber;
 
     /**
      * 계정 활성화 상태
-     * - true: 활성화된 사용자 (로그인 가능)
-     * - false: 비활성화된 사용자 (로그인 불가)
-     * - 관리자가 사용자 계정을 일시적으로 중지할 때 사용
+     * true: 활성 계정, false: 비활성 계정
      */
     @Column(name = "is_active", nullable = false)
-    @Builder.Default  // 빌더 패턴에서 기본값 설정
     private Boolean isActive = true;
 
     /**
      * 계정 잠금 상태
-     * - true: 계정 잠금 (로그인 불가)
-     * - false: 정상 상태
-     * - 로그인 실패 횟수 초과시 자동 잠금 예정
+     * true: 잠금된 계정, false: 정상 계정
+     * 보안 정책에 의해 일시적으로 접근을 차단할 때 사용
      */
     @Column(name = "is_locked", nullable = false)
-    @Builder.Default
     private Boolean isLocked = false;
 
     /**
-     * 계정 만료 여부
-     * - true: 계정 만료
-     * - false: 정상 상태
-     * - 임시 계정이나 기간 제한 계정에 사용
+     * 비밀번호 만료 여부
+     * true: 비밀번호 변경 필요, false: 정상
      */
-    @Column(name = "is_expired", nullable = false)
-    @Builder.Default
-    private Boolean isExpired = false;
+    @Column(name = "password_expired", nullable = false)
+    private Boolean passwordExpired = false;
 
     /**
      * 마지막 로그인 시간
-     * - 사용자의 마지막 로그인 일시 기록
-     * - 활동 통계 및 휴면 계정 관리에 사용
+     * 사용자 활동 추적 및 보안 모니터링에 활용
      */
     @Column(name = "last_login_at")
     private LocalDateTime lastLoginAt;
 
     /**
      * 로그인 실패 횟수
-     * - 연속된 로그인 실패 횟수 기록
-     * - 일정 횟수 초과시 계정 잠금
-     * - 성공적인 로그인시 0으로 리셋
+     * 보안 정책에 따른 계정 잠금 처리에 사용
      */
     @Column(name = "failed_login_attempts", nullable = false)
-    @Builder.Default
     private Integer failedLoginAttempts = 0;
 
     /**
-     * 사용자 역할 (다대다 관계)
-     * - 한 사용자는 여러 역할을 가질 수 있음
-     * - 예: 일반사용자 + 게시판관리자
-     * - LAZY 로딩으로 성능 최적화
+     * 계정 생성 시간 (자동 설정)
+     * Hibernate가 엔티티 저장 시 자동으로 현재 시간 설정
      */
-    @ManyToMany(fetch = FetchType.LAZY, cascade = CascadeType.PERSIST)
-    @JoinTable(
-            name = "user_roles",                    // 연결 테이블명
-            joinColumns = @JoinColumn(name = "user_id"),        // 현재 엔티티 컬럼
-            inverseJoinColumns = @JoinColumn(name = "role_id")  // 대상 엔티티 컬럼
-    )
-    @Builder.Default
-    private Set<Role> roles = new HashSet<>();
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
 
     /**
-     * 비즈니스 메서드: 역할 추가
-     * - 사용자에게 새로운 역할을 추가
-     * - 중복 추가 방지
+     * 계정 최종 수정 시간 (자동 설정)
+     * Hibernate가 엔티티 수정 시 자동으로 현재 시간 갱신
+     */
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
+
+    /**
+     * 사용자-역할 다대다 관계 매핑
+     *
+     * fetch = FetchType.EAGER: 사용자 조회 시 역할 정보도 함께 조회
+     * cascade = CascadeType.MERGE: 사용자 수정 시 역할 연관관계도 함께 처리
+     *
+     * 중간 테이블(user_roles) 설정:
+     * - joinColumns: 현재 엔티티(User)의 외래키
+     * - inverseJoinColumns: 상대 엔티티(Role)의 외래키
+     */
+    @ManyToMany(fetch = FetchType.EAGER, cascade = CascadeType.MERGE)
+    @JoinTable(
+            name = "user_roles",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "role_id")
+    )
+    private Set<Role> roles = new HashSet<>();
+
+    // ================================
+    // 기본 생성자 및 편의 생성자
+    // ================================
+
+    /**
+     * 기본 생성자 (JPA 필수)
+     */
+    public User() {}
+
+    /**
+     * 필수 필드 생성자
+     * 사용자 생성 시 반드시 필요한 정보들을 매개변수로 받습니다.
+     *
+     * @param username 로그인 아이디
+     * @param password 암호화된 비밀번호
+     * @param email 이메일 주소
+     * @param fullName 사용자 실명
+     */
+    public User(String username, String password, String email, String fullName) {
+        this.username = username;
+        this.password = password;
+        this.email = email;
+        this.fullName = fullName;
+        this.isActive = true;
+        this.isLocked = false;
+        this.passwordExpired = false;
+        this.failedLoginAttempts = 0;
+    }
+
+    // ================================
+    // 비즈니스 메서드
+    // ================================
+
+    /**
+     * 사용자에게 역할 추가
      *
      * @param role 추가할 역할
      */
     public void addRole(Role role) {
-        if (role != null) {
-            this.roles.add(role);
-            role.getUsers().add(this);  // 양방향 관계 동기화
-        }
+        this.roles.add(role);
+        role.getUsers().add(this);
     }
 
     /**
-     * 비즈니스 메서드: 역할 제거
-     * - 사용자에게서 특정 역할을 제거
+     * 사용자에게서 역할 제거
      *
      * @param role 제거할 역할
      */
     public void removeRole(Role role) {
-        if (role != null) {
-            this.roles.remove(role);
-            role.getUsers().remove(this);  // 양방향 관계 동기화
-        }
+        this.roles.remove(role);
+        role.getUsers().remove(this);
     }
 
     /**
-     * 비즈니스 메서드: 특정 역할 보유 여부 확인
-     * - 사용자가 특정 역할을 가지고 있는지 확인
+     * 특정 역할 보유 여부 확인
      *
-     * @param roleName 확인할 역할명
-     * @return 역할 보유 여부
+     * @param roleName 역할명 (예: "ROLE_ADMIN")
+     * @return 역할 보유 시 true, 아니면 false
      */
     public boolean hasRole(String roleName) {
         return this.roles.stream()
@@ -200,71 +234,185 @@ public class User extends BaseEntity {
     }
 
     /**
-     * 비즈니스 메서드: 계정 잠금
-     * - 사용자 계정을 잠금 상태로 변경
+     * 최고 권한 역할 확인
+     * 우선순위가 가장 낮은 숫자(=가장 높은 권한)를 가진 역할을 반환
+     *
+     * @return 최고 권한 역할, 역할이 없으면 null
      */
-    public void lockAccount() {
-        this.isLocked = true;
+    public Role getHighestPriorityRole() {
+        return this.roles.stream()
+                .min(Comparator.comparing(Role::getPriority))
+                .orElse(null);
     }
 
     /**
-     * 비즈니스 메서드: 계정 잠금 해제
-     * - 사용자 계정의 잠금을 해제하고 실패 횟수 초기화
+     * 로그인 성공 처리
+     * 마지막 로그인 시간 갱신 및 실패 횟수 초기화
      */
-    public void unlockAccount() {
-        this.isLocked = false;
+    public void onLoginSuccess() {
+        this.lastLoginAt = LocalDateTime.now();
         this.failedLoginAttempts = 0;
     }
 
     /**
-     * 비즈니스 메서드: 로그인 실패 기록
-     * - 로그인 실패시 호출하여 실패 횟수 증가
-     * - 5회 실패시 자동으로 계정 잠금
+     * 로그인 실패 처리
+     * 실패 횟수 증가 및 정책에 따른 계정 잠금 처리
+     *
+     * @param maxAttempts 최대 허용 실패 횟수
      */
-    public void recordLoginFailure() {
+    public void onLoginFailure(int maxAttempts) {
         this.failedLoginAttempts++;
-        if (this.failedLoginAttempts >= 5) {
-            this.lockAccount();
+        if (this.failedLoginAttempts >= maxAttempts) {
+            this.isLocked = true;
         }
     }
 
     /**
-     * 비즈니스 메서드: 로그인 성공 기록
-     * - 성공적인 로그인시 호출
-     * - 실패 횟수 초기화 및 마지막 로그인 시간 업데이트
+     * 계정 잠금 해제
      */
-    public void recordLoginSuccess() {
+    public void unlock() {
+        this.isLocked = false;
         this.failedLoginAttempts = 0;
-        this.lastLoginAt = LocalDateTime.now();
+    }
+
+    // ================================
+    // UserDetails 인터페이스 구현
+    // Spring Security 인증에 필요한 메서드들
+    // ================================
+
+    /**
+     * 사용자 권한 목록 반환
+     * Spring Security에서 권한 검증에 사용
+     *
+     * @return 권한 목록
+     */
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return this.roles.stream()
+                .map(role -> new SimpleGrantedAuthority(role.getRoleName()))
+                .collect(Collectors.toList());
     }
 
     /**
-     * 비즈니스 메서드: 계정 사용 가능 여부 확인
-     * - Spring Security에서 사용
+     * 계정 만료 여부
      *
-     * @return 계정 사용 가능 여부
+     * @return 만료되지 않았으면 true
      */
+    @Override
     public boolean isAccountNonExpired() {
-        return !this.isExpired;
+        return true; // 현재는 계정 만료 정책이 없음
     }
 
     /**
-     * 비즈니스 메서드: 계정 잠금 상태 확인
-     * - Spring Security에서 사용
+     * 계정 잠금 여부
      *
-     * @return 계정 잠금 여부 (true: 잠금되지 않음)
+     * @return 잠금되지 않았으면 true
      */
+    @Override
     public boolean isAccountNonLocked() {
         return !this.isLocked;
     }
 
     /**
-     * 비즈니스 메서드: 계정 활성화 상태 확인
-     * - Spring Security에서 사용
+     * 비밀번호 만료 여부
      *
-     * @return 계정 활성화 여부
+     * @return 만료되지 않았으면 true
      */
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return !this.passwordExpired;
+    }
+
+    /**
+     * 계정 활성화 여부
+     *
+     * @return 활성화되어 있으면 true
+     */
+    @Override
     public boolean isEnabled() {
         return this.isActive;
+    }
+
+    // ================================
+    // Getter 및 Setter 메서드
+    // ================================
+
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
+
+    public String getUsername() { return username; }
+    public void setUsername(String username) { this.username = username; }
+
+    public String getPassword() { return password; }
+    public void setPassword(String password) { this.password = password; }
+
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+
+    public String getFullName() { return fullName; }
+    public void setFullName(String fullName) { this.fullName = fullName; }
+
+    public String getDepartment() { return department; }
+    public void setDepartment(String department) { this.department = department; }
+
+    public String getPosition() { return position; }
+    public void setPosition(String position) { this.position = position; }
+
+    public String getPhoneNumber() { return phoneNumber; }
+    public void setPhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
+
+    public Boolean getIsActive() { return isActive; }
+    public void setIsActive(Boolean isActive) { this.isActive = isActive; }
+
+    public Boolean getIsLocked() { return isLocked; }
+    public void setIsLocked(Boolean isLocked) { this.isLocked = isLocked; }
+
+    public Boolean getPasswordExpired() { return passwordExpired; }
+    public void setPasswordExpired(Boolean passwordExpired) { this.passwordExpired = passwordExpired; }
+
+    public LocalDateTime getLastLoginAt() { return lastLoginAt; }
+    public void setLastLoginAt(LocalDateTime lastLoginAt) { this.lastLoginAt = lastLoginAt; }
+
+    public Integer getFailedLoginAttempts() { return failedLoginAttempts; }
+    public void setFailedLoginAttempts(Integer failedLoginAttempts) { this.failedLoginAttempts = failedLoginAttempts; }
+
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public Set<Role> getRoles() { return roles; }
+    public void setRoles(Set<Role> roles) { this.roles = roles; }
+
+    // ================================
+    // Object 클래스 메서드 오버라이드
+    // ================================
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        User user = (User) o;
+        return Objects.equals(userId, user.userId) &&
+                Objects.equals(username, user.username);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(userId, username);
+    }
+
+    @Override
+    public String toString() {
+        return "User{" +
+                "userId=" + userId +
+                ", username='" + username + '\'' +
+                ", email='" + email + '\'' +
+                ", fullName='" + fullName + '\'' +
+                ", department='" + department + '\'' +
+                ", isActive=" + isActive +
+                ", isLocked=" + isLocked +
+                '}';
     }
 }

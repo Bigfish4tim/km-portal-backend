@@ -1,154 +1,94 @@
-# ==============================================
-# 📁 src/main/resources/application.yml
-# 공통 설정 파일
-# ==============================================
+# KM 포털 - Spring Boot 애플리케이션 설정파일
+# 공통 설정 (모든 환경에서 적용되는 기본 설정)
+
+spring:
+  # 활성 프로필 설정 (개발환경: dev, 운영환경: prod)
+  profiles:
+    active: dev
+
+  # JPA 및 Hibernate 설정
+  jpa:
+    # Hibernate 방언 설정 (데이터베이스 종류에 따른 SQL 방언)
+    database-platform: org.hibernate.dialect.H2Dialect
+
+    # JPA Hibernate 상세 설정
+    hibernate:
+      # DDL 자동 생성 옵션
+      # create: 기존 테이블 삭제 후 새로 생성
+      # create-drop: create + 애플리케이션 종료시 테이블 삭제
+      # update: 기존 테이블 유지하고 변경사항만 적용
+      # validate: 엔티티와 테이블 매핑 검증만 수행
+      ddl-auto: create-drop
+
+      # 물리적 네이밍 전략 (테이블명, 컬럼명 생성 규칙)
+      # SpringPhysicalNamingStrategy: camelCase -> snake_case 변환
+      physical-strategy: org.hibernate.boot.model.naming.SpringPhysicalNamingStrategy
+
+      # 암시적 네이밍 전략 (명시되지 않은 이름 생성 규칙)
+      implicit-strategy: org.hibernate.boot.model.naming.SpringImplicitNamingStrategy
+
+    # JPA 실행 쿼리 출력 (개발시 유용)
+    show-sql: true
+
+    # JPA 구현체 프로퍼티
+    properties:
+      hibernate:
+        # SQL 쿼리 포맷팅 (읽기 쉽게 정렬)
+        format_sql: true
+        # SQL 주석 표시 (어떤 엔티티에서 실행된 쿼리인지 표시)
+        use_sql_comments: true
+        # JDBC 배치 처리 최적화
+        jdbc:
+          batch_size: 20
+        # 2차 캐시 설정
+        cache:
+          use_second_level_cache: false
+
+  # 데이터베이스 초기화 설정
+  sql:
+    init:
+      # 스키마 초기화 모드 (always: 항상, never: 안함, embedded: 임베디드DB만)
+      mode: always
+      # 스키마 파일 경로
+      schema-locations: classpath:schema.sql
+      # 데이터 파일 경로
+      data-locations: classpath:data-dev.sql
+      # 초기화 순서 (hibernate 이후 실행)
+      defer-datasource-initialization: true
+
+# JPA 관련 로깅 설정
+logging:
+  level:
+    # JPA/Hibernate 관련 로그 레벨
+    org.hibernate.SQL: DEBUG                    # 실행되는 SQL 쿼리 출력
+    org.hibernate.type.descriptor.sql: TRACE    # SQL 파라미터 바인딩 값 출력
+    org.hibernate.orm.jdbc.bind: TRACE          # JDBC 바인딩 파라미터 출력
+    org.springframework.orm.jpa: DEBUG          # Spring JPA 로그
+    org.springframework.transaction: DEBUG       # 트랜잭션 로그
+
+    # 애플리케이션 패키지 로그 레벨
+    com.kmportal: DEBUG
+
+    # 루트 로그 레벨
+    root: INFO
 
 # 서버 설정
 server:
-  port: 8080                    # 백엔드 포트 (프론트엔드는 3000)
+  port: 8080
   servlet:
-    context-path: ""            # 컨텍스트 패스 없음 (루트 경로)
+    context-path: /api
     encoding:
-      charset: UTF-8            # 한글 인코딩 설정
-      enabled: true
+      charset: UTF-8
       force: true
 
-# Spring 애플리케이션 설정
-spring:
-  application:
-    name: km-portal-backend     # 애플리케이션 이름
-
-  # 프로파일 설정 (개발환경은 dev, 운영환경은 prod)
-  profiles:
-    active: dev                 # 기본적으로 개발환경 사용
-
-  # JSON 처리 설정
-  jackson:
-    serialization:
-      write-dates-as-timestamps: false    # 날짜를 ISO 8601 형식으로 출력
-    deserialization:
-      fail-on-unknown-properties: false   # 알 수 없는 속성 무시
-    default-property-inclusion: non_null  # null 값은 JSON에 포함하지 않음
-    time-zone: Asia/Seoul                 # 한국 시간대 설정
-
-# 로그 설정
-logging:
-  level:
-    com.kmportal.backend: DEBUG           # 우리 패키지는 DEBUG 레벨
-    org.springframework.web: DEBUG       # Spring Web 관련 DEBUG
-    org.springframework.security: DEBUG  # Spring Security DEBUG
-    org.hibernate.SQL: DEBUG             # SQL 쿼리 출력
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE  # SQL 파라미터 출력
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
-
-# 관리 엔드포인트 설정 (Spring Boot Actuator)
+# 매니지먼트 엔드포인트 (모니터링, 헬스체크 등)
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics       # 노출할 엔드포인트
+        # 개발환경에서 모든 엔드포인트 노출
+        include: "*"
   endpoint:
     health:
-      show-details: always                 # 헬스체크 상세 정보 표시
-
----
-
-# ==============================================
-# 📁 src/main/resources/application-dev.yml
-# 개발환경 전용 설정
-# ==============================================
-
-spring:
-  # 개발환경 데이터베이스 설정 (H2 Database)
-  datasource:
-    url: jdbc:h2:mem:kmportal_dev           # 메모리 DB 사용 (재시작시 초기화됨)
-    # url: jdbc:h2:file:./data/kmportal_dev # 파일 DB 사용 (데이터 유지됨)
-    driver-class-name: org.h2.Driver
-    username: sa                            # H2 기본 사용자명
-    password:                               # H2 기본 패스워드 (빈값)
-
-  # H2 Database 웹 콘솔 설정
-  h2:
-    console:
-      enabled: true                         # H2 웹 콘솔 활성화
-      path: /h2-console                     # 접속 경로: http://localhost:8080/h2-console
-      settings:
-        web-allow-others: true              # 외부 접속 허용 (개발환경만)
-
-  # JPA 설정
-  jpa:
-    hibernate:
-      ddl-auto: create-drop                 # 시작시 테이블 생성, 종료시 삭제 (개발환경)
-      # ddl-auto: update                    # 스키마 변경시만 업데이트 (데이터 보존)
-    show-sql: true                          # SQL 쿼리 콘솔 출력
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.H2Dialect  # H2 방언 사용
-        format_sql: true                    # SQL 쿼리 포맷팅
-        use_sql_comments: true              # SQL 주석 출력
-        default_batch_fetch_size: 100       # 배치 페치 크기 최적화
-    defer-datasource-initialization: true   # 데이터 초기화 지연
-
-  # SQL 초기화 설정
-  sql:
-    init:
-      mode: always                          # 항상 초기화 스크립트 실행
-      data-locations: classpath:data-dev.sql # 개발용 초기 데이터
-      continue-on-error: false              # 오류 발생시 중단
-
-# 개발환경 로그 설정
-logging:
-  level:
-    org.springframework.web.servlet.DispatcherServlet: DEBUG
-    org.springframework.transaction: DEBUG
-
----
-
-# ==============================================
-# 📁 src/main/resources/application-prod.yml
-# 운영환경 전용 설정
-# ==============================================
-
-spring:
-  # 운영환경 데이터베이스 설정 (MS SQL Server)
-  datasource:
-    url: jdbc:sqlserver://localhost:1433;databaseName=kmportal_prod;encrypt=false;trustServerCertificate=true
-    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
-    username: ${DB_USERNAME:kmportal_user}  # 환경변수 또는 기본값
-    password: ${DB_PASSWORD:your_password}  # 환경변수 또는 기본값 (실제로는 환경변수 사용)
-    hikari:                                 # HikariCP 커넥션 풀 설정
-      maximum-pool-size: 20                 # 최대 커넥션 수
-      minimum-idle: 5                       # 최소 유휴 커넥션 수
-      connection-timeout: 30000             # 커넥션 타임아웃 (30초)
-      idle-timeout: 600000                  # 유휴 타임아웃 (10분)
-      max-lifetime: 1800000                 # 최대 생명주기 (30분)
-      leak-detection-threshold: 60000       # 커넥션 누수 감지 임계값 (1분)
-
-  # JPA 설정
-  jpa:
-    hibernate:
-      ddl-auto: validate                    # 운영환경에서는 스키마 검증만 수행
-    show-sql: false                         # 운영환경에서는 SQL 출력 안함
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.SQLServerDialect  # SQL Server 방언
-        default_batch_fetch_size: 100
-        jdbc:
-          batch_size: 50                    # 배치 INSERT 크기
-        order_inserts: true                 # INSERT 순서 최적화
-        order_updates: true                 # UPDATE 순서 최적화
-        use_sql_comments: false             # 운영환경에서는 SQL 주석 비활성화
-
-# 운영환경 로그 설정
-logging:
-  level:
-    com.kmportal.backend: INFO              # 운영환경에서는 INFO 레벨
-    org.springframework: WARN               # Spring 관련 로그 최소화
-    org.hibernate: WARN                     # Hibernate 로그 최소화
-  file:
-    name: logs/km-portal-backend.log        # 로그 파일 경로
-  logback:
-    rollingpolicy:
-      max-file-size: 100MB                  # 로그 파일 최대 크기
-      max-history: 30                       # 로그 파일 보관 일수
+      # 헬스체크 상세 정보 표시
+      show-details: always

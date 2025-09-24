@@ -1,15 +1,8 @@
-
-// ==============================================
-// 📁 RoleRepository.java  
-// 역할 데이터 액세스 레이어
-// ==============================================
-
 package com.kmportal.backend.repository;
 
 import com.kmportal.backend.entity.Role;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -18,127 +11,309 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 역할 레포지토리
- * - Spring Data JPA를 활용한 역할 데이터 액세스
- * - RBAC 시스템의 핵심 데이터 관리
+ * 역할 데이터 액세스 Repository
  *
- * @author KM Portal Team
- * @since 2025-09-23 (3일차)
+ * RBAC(Role-Based Access Control) 시스템의 역할 관리를 위한
+ * 데이터 액세스 계층입니다.
+ *
+ * 주요 기능:
+ * - 역할 CRUD 기본 기능
+ * - 시스템 역할과 사용자 정의 역할 구분 관리
+ * - 우선순위 기반 역할 조회
+ * - 역할별 통계 정보 제공
+ *
+ * @author KM Portal Dev Team
+ * @version 1.0
+ * @since 2025-09-24
  */
 @Repository
 public interface RoleRepository extends JpaRepository<Role, Long> {
 
-    // ========================================
+    // ================================
     // 기본 조회 메서드
-    // ========================================
+    // ================================
 
     /**
      * 역할명으로 역할 조회
-     * - Spring Security에서 권한 확인 시 사용
-     * - 예: "ROLE_ADMIN" 으로 관리자 역할 조회
+     * Spring Security에서 권한 확인 시 주로 사용
      *
-     * @param roleName 역할명
-     * @return 역할 정보
+     * @param roleName 역할명 (예: "ROLE_ADMIN")
+     * @return 역할 정보 (Optional로 감싼 결과)
      */
     Optional<Role> findByRoleName(String roleName);
 
     /**
      * 표시명으로 역할 조회
-     * - 관리자 화면에서 친숙한 이름으로 역할 찾기
+     * 관리 화면에서 사용자 친화적인 이름으로 조회
      *
-     * @param displayName 표시명 (예: "시스템 관리자")
-     * @return 역할 정보
+     * @param displayName 표시명 (예: "관리자")
+     * @return 역할 정보 (Optional로 감싼 결과)
      */
     Optional<Role> findByDisplayName(String displayName);
 
-    // ========================================
+    /**
+     * 역할명 존재 여부 확인
+     * 새로운 역할 생성 시 중복 체크에 사용
+     *
+     * @param roleName 확인할 역할명
+     * @return 존재하면 true, 없으면 false
+     */
+    boolean existsByRoleName(String roleName);
+
+    /**
+     * 표시명 존재 여부 확인
+     *
+     * @param displayName 확인할 표시명
+     * @return 존재하면 true, 없으면 false
+     */
+    boolean existsByDisplayName(String displayName);
+
+    // ================================
     // 상태별 조회 메서드
-    // ========================================
+    // ================================
 
     /**
      * 활성화된 역할 목록 조회
-     * - 사용자에게 할당 가능한 역할만 조회
-     * - 우선순위 순으로 정렬
+     * 사용자에게 할당 가능한 역할들만 조회
      *
-     * @return 활성화된 역할 목록
+     * @return 활성 역할 목록
      */
-    @Query("SELECT r FROM Role r WHERE r.isActive = true ORDER BY r.priority ASC")
-    List<Role> findActiveRolesOrderByPriority();
+    List<Role> findByIsActiveTrue();
+
+    /**
+     * 비활성화된 역할 목록 조회
+     * 관리자가 비활성 역할을 관리할 때 사용
+     *
+     * @return 비활성 역할 목록
+     */
+    List<Role> findByIsActiveFalse();
 
     /**
      * 시스템 역할 목록 조회
-     * - 삭제할 수 없는 기본 역할들 조회
+     * 삭제/수정 불가능한 기본 시스템 역할들
      *
      * @return 시스템 역할 목록
      */
     List<Role> findByIsSystemRoleTrue();
 
     /**
-     * 커스텀 역할 목록 조회
-     * - 관리자가 생성한 삭제 가능한 역할들
+     * 사용자 정의 역할 목록 조회
+     * 관리자가 생성한 커스텀 역할들
      *
-     * @param pageable 페이징 정보
-     * @return 커스텀 역할 페이지
+     * @return 사용자 정의 역할 목록
      */
-    Page<Role> findByIsSystemRoleFalse(Pageable pageable);
-
-    // ========================================
-    // 검색 메서드
-    // ========================================
+    List<Role> findByIsSystemRoleFalse();
 
     /**
-     * 역할명 또는 표시명으로 검색
-     * - 관리자 화면에서 역할 검색 기능
+     * 활성화된 시스템 역할 조회
+     * 시스템 초기화나 기본 권한 설정에 사용
      *
-     * @param keyword 검색 키워드
-     * @param pageable 페이징 정보
-     * @return 검색된 역할 페이지
+     * @return 활성화된 시스템 역할 목록
      */
-    @Query("SELECT r FROM Role r WHERE " +
-            "LOWER(r.roleName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
-            "LOWER(r.displayName) LIKE LOWER(CONCAT('%', :keyword, '%'))")
-    Page<Role> searchRoles(@Param("keyword") String keyword, Pageable pageable);
-
-    // ========================================
-    // 우선순위 관련 메서드
-    // ========================================
+    List<Role> findByIsSystemRoleTrueAndIsActiveTrue();
 
     /**
-     * 우선순위 범위 내 역할 조회
-     * - 특정 권한 레벨 이상의 역할만 조회
+     * 활성화된 사용자 정의 역할 조회
+     * 관리자가 사용자에게 할당 가능한 커스텀 역할들
      *
-     * @param minPriority 최소 우선순위 (낮은 숫자 = 높은 우선순위)
+     * @return 활성화된 사용자 정의 역할 목록
+     */
+    List<Role> findByIsSystemRoleFalseAndIsActiveTrue();
+
+    // ================================
+    // 우선순위 기반 조회 메서드
+    // ================================
+
+    /**
+     * 우선순위 오름차순으로 모든 활성 역할 조회
+     * 권한 레벨 순으로 정렬 (낮은 숫자 = 높은 권한이 먼저)
+     *
+     * 메서드명 규칙: findBy + 조건 + OrderBy + 필드명 + 정렬방향
+     * - OrderBy: 정렬 조건
+     * - Priority: 정렬할 필드
+     * - Asc: 오름차순 (Ascending)
+     *
+     * @return 우선순위 순으로 정렬된 활성 역할 목록
+     */
+    List<Role> findByIsActiveTrueOrderByPriorityAsc();
+
+    /**
+     * 특정 우선순위 이하의 역할들 조회
+     * 현재 사용자의 권한 이하의 역할만 조회할 때 사용
+     *
+     * 메서드명 규칙: findBy + 필드명 + LessThanEqual
+     * - LessThanEqual: <= 연산 (이하)
+     *
+     * @param priority 기준 우선순위
+     * @return 해당 우선순위 이하의 역할 목록
+     */
+    List<Role> findByPriorityLessThanEqualAndIsActiveTrueOrderByPriorityAsc(Integer priority);
+
+    /**
+     * 특정 우선순위 이상의 역할들 조회
+     * 현재 사용자보다 낮은 권한의 역할만 조회할 때 사용
+     *
+     * 메서드명 규칙: findBy + 필드명 + GreaterThanEqual
+     * - GreaterThanEqual: >= 연산 (이상)
+     *
+     * @param priority 기준 우선순위
+     * @return 해당 우선순위 이상의 역할 목록
+     */
+    List<Role> findByPriorityGreaterThanEqualAndIsActiveTrueOrderByPriorityAsc(Integer priority);
+
+    /**
+     * 최고 권한 역할 조회
+     * 우선순위가 가장 낮은(권한이 가장 높은) 역할
+     *
+     * @return 최고 권한 역할
+     */
+    Optional<Role> findTopByIsActiveTrueOrderByPriorityAsc();
+
+    // ================================
+    // 검색 메서드 (Like 조건 사용)
+    // ================================
+
+    /**
+     * 표시명으로 역할 검색 (부분 일치)
+     * 관리 화면에서 역할 검색 시 사용
+     *
+     * @param displayName 검색할 표시명 (부분 일치)
+     * @return 표시명에 해당 문자가 포함된 역할 목록
+     */
+    List<Role> findByDisplayNameContainingIgnoreCase(String displayName);
+
+    /**
+     * 설명으로 역할 검색 (부분 일치)
+     * 역할의 기능을 설명으로 찾을 때 사용
+     *
+     * @param description 검색할 설명 (부분 일치)
+     * @return 설명에 해당 문자가 포함된 역할 목록
+     */
+    List<Role> findByDescriptionContainingIgnoreCase(String description);
+
+    // ================================
+    // 커스텀 쿼리 메서드 (@Query 사용)
+    // ================================
+
+    /**
+     * 특정 사용자가 가진 역할들 조회
+     * 사용자의 권한을 확인할 때 사용
+     *
+     * @param userId 사용자 ID
+     * @return 해당 사용자가 가진 역할 목록
+     */
+    @Query("SELECT r FROM Role r JOIN r.users u WHERE u.userId = :userId")
+    List<Role> findByUserId(@Param("userId") Long userId);
+
+    /**
+     * 특정 사용자가 가진 활성 역할들 조회
+     * 실제 권한 확인 시 사용 (비활성 역할 제외)
+     *
+     * @param userId 사용자 ID
+     * @return 해당 사용자가 가진 활성 역할 목록
+     */
+    @Query("SELECT r FROM Role r JOIN r.users u WHERE u.userId = :userId AND r.isActive = true " +
+            "ORDER BY r.priority ASC")
+    List<Role> findActiveRolesByUserId(@Param("userId") Long userId);
+
+    /**
+     * 특정 사용자의 최고 권한 역할 조회
+     * 사용자의 최고 권한을 확인할 때 사용
+     *
+     * @param userId 사용자 ID
+     * @return 해당 사용자의 최고 권한 역할 (우선순위가 가장 낮은 것)
+     */
+    @Query("SELECT r FROM Role r JOIN r.users u WHERE u.userId = :userId AND r.isActive = true " +
+            "ORDER BY r.priority ASC LIMIT 1")
+    Optional<Role> findHighestPriorityRoleByUserId(@Param("userId") Long userId);
+
+    /**
+     * 사용자 수가 많은 역할들 조회 (인기 역할)
+     * 시스템 통계나 분석에 사용
+     *
+     * @return 사용자 수가 많은 순으로 정렬된 역할 목록
+     */
+    @Query("SELECT r, COUNT(u) as userCount FROM Role r LEFT JOIN r.users u " +
+            "WHERE r.isActive = true GROUP BY r ORDER BY userCount DESC")
+    List<Object[]> findRolesWithUserCount();
+
+    /**
+     * 사용자가 없는 역할들 조회
+     * 불필요한 역할 정리나 관리에 사용
+     *
+     * @return 사용자가 할당되지 않은 역할 목록
+     */
+    @Query("SELECT r FROM Role r WHERE r.users IS EMPTY AND r.isSystemRole = false")
+    List<Role> findRolesWithoutUsers();
+
+    /**
+     * 특정 우선순위 범위의 역할들 조회
+     * 권한 레벨별 역할 관리에 사용
+     *
+     * @param minPriority 최소 우선순위
      * @param maxPriority 최대 우선순위
-     * @return 해당 범위의 역할 목록
+     * @return 해당 우선순위 범위의 역할 목록
      */
-    @Query("SELECT r FROM Role r WHERE r.priority BETWEEN :minPriority AND :maxPriority ORDER BY r.priority ASC")
-    List<Role> findByPriorityBetween(@Param("minPriority") Integer minPriority,
-                                     @Param("maxPriority") Integer maxPriority);
+    @Query("SELECT r FROM Role r WHERE r.priority BETWEEN :minPriority AND :maxPriority " +
+            "AND r.isActive = true ORDER BY r.priority ASC")
+    List<Role> findRolesByPriorityRange(@Param("minPriority") Integer minPriority,
+                                        @Param("maxPriority") Integer maxPriority);
+
+    // ================================
+    // 업데이트 메서드 (@Modifying 사용)
+    // ================================
 
     /**
-     * 가장 높은 우선순위 조회
-     * - 새로운 역할의 우선순위 결정에 사용
+     * 역할 비활성화
+     * 역할 삭제 대신 비활성화 처리 (소프트 삭제)
      *
-     * @return 가장 낮은 우선순위 값 (= 가장 높은 권한)
+     * @param roleId 역할 ID
+     * @return 업데이트된 레코드 수
      */
-    @Query("SELECT MIN(r.priority) FROM Role r")
-    Optional<Integer> findMinPriority();
+    @Modifying
+    @Query("UPDATE Role r SET r.isActive = false WHERE r.roleId = :roleId")
+    int deactivateRole(@Param("roleId") Long roleId);
 
     /**
-     * 가장 낮은 우선순위 조회
-     * - 새로운 역할의 기본 우선순위 결정
+     * 역할 활성화
      *
-     * @return 가장 높은 우선순위 값 (= 가장 낮은 권한)
+     * @param roleId 역할 ID
+     * @return 업데이트된 레코드 수
      */
-    @Query("SELECT MAX(r.priority) FROM Role r")
-    Optional<Integer> findMaxPriority();
-
-    // ========================================
-    // 통계 쿼리 메서드
-    // ========================================
+    @Modifying
+    @Query("UPDATE Role r SET r.isActive = true WHERE r.roleId = :roleId")
+    int activateRole(@Param("roleId") Long roleId);
 
     /**
-     * 활성화된 역할 수 조회
+     * 역할 우선순위 업데이트
+     * 권한 레벨 조정에 사용
+     *
+     * @param roleId 역할 ID
+     * @param priority 새로운 우선순위
+     * @return 업데이트된 레코드 수
+     */
+    @Modifying
+    @Query("UPDATE Role r SET r.priority = :priority WHERE r.roleId = :roleId")
+    int updateRolePriority(@Param("roleId") Long roleId, @Param("priority") Integer priority);
+
+    /**
+     * 역할 설명 업데이트
+     * 역할의 책임이나 권한이 변경될 때 사용
+     *
+     * @param roleId 역할 ID
+     * @param description 새로운 설명
+     * @return 업데이트된 레코드 수
+     */
+    @Modifying
+    @Query("UPDATE Role r SET r.description = :description WHERE r.roleId = :roleId")
+    int updateRoleDescription(@Param("roleId") Long roleId, @Param("description") String description);
+
+    // ================================
+    // 통계 및 집계 메서드
+    // ================================
+
+    /**
+     * 활성 역할 수 조회
      *
      * @return 활성 역할 수
      */
@@ -152,8 +327,23 @@ public interface RoleRepository extends JpaRepository<Role, Long> {
     long countByIsSystemRoleTrue();
 
     /**
+     * 사용자 정의 역할 수 조회
+     *
+     * @return 사용자 정의 역할 수
+     */
+    long countByIsSystemRoleFalse();
+
+    /**
+     * 특정 우선순위 이하 활성 역할 수 조회
+     *
+     * @param priority 기준 우선순위
+     * @return 해당 우선순위 이하의 활성 역할 수
+     */
+    long countByPriorityLessThanEqualAndIsActiveTrue(Integer priority);
+
+    /**
      * 특정 역할을 가진 사용자 수 조회
-     * - 역할별 사용자 통계
+     * 역할별 사용자 통계에 사용
      *
      * @param roleId 역할 ID
      * @return 해당 역할을 가진 사용자 수
@@ -161,33 +351,14 @@ public interface RoleRepository extends JpaRepository<Role, Long> {
     @Query("SELECT COUNT(u) FROM User u JOIN u.roles r WHERE r.roleId = :roleId")
     long countUsersByRoleId(@Param("roleId") Long roleId);
 
-    // ========================================
-    // 중복 확인 메서드
-    // ========================================
-
     /**
-     * 역할명 중복 확인
-     * - 새로운 역할 생성 시 중복 검사
+     * 각 역할별 사용자 수 통계
+     * 관리 대시보드나 통계 화면에서 사용
      *
-     * @param roleName 확인할 역할명
-     * @return 중복 여부
+     * @return 역할별 사용자 수 (역할명, 사용자 수)
      */
-    boolean existsByRoleName(String roleName);
-
-    /**
-     * 표시명 중복 확인
-     *
-     * @param displayName 확인할 표시명
-     * @return 중복 여부
-     */
-    boolean existsByDisplayName(String displayName);
-
-    /**
-     * 역할 업데이트 시 중복 확인 (자신 제외)
-     *
-     * @param roleName 확인할 역할명
-     * @param roleId 제외할 역할 ID
-     * @return 중복 여부
-     */
-    boolean existsByRoleNameAndRoleIdNot(String roleName, Long roleId);
+    @Query("SELECT r.displayName, COUNT(u) FROM Role r LEFT JOIN r.users u " +
+            "WHERE r.isActive = true GROUP BY r.roleId, r.displayName " +
+            "ORDER BY COUNT(u) DESC")
+    List<Object[]> getRoleUserStatistics();
 }

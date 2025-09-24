@@ -1,194 +1,200 @@
--- ==============================================
--- 📁 src/main/resources/data-dev.sql
--- 개발환경 초기 데이터 삽입 스크립트
--- ==============================================
+-- KM 포털 개발환경 초기 데이터
+-- 이 파일은 개발 환경에서 애플리케이션 시작 시 자동으로 실행됩니다.
+-- 테스트를 위한 사용자, 역할 데이터를 포함합니다.
 
--- 주의사항:
--- 1. H2 Database 문법에 맞춰 작성
--- 2. 개발환경에서만 실행됨 (application-dev.yml 설정)
--- 3. Spring Boot 시작시 자동으로 실행됨
--- 4. 테이블은 JPA가 자동으로 생성하므로 CREATE TABLE 문 불필요
-
--- ==============================================
--- 역할(Role) 초기 데이터 삽입
--- ==============================================
+-- ================================
+-- 역할(Role) 테이블 초기 데이터
+-- ================================
 
 -- 시스템 관리자 역할
-INSERT INTO roles (role_name, display_name, description, is_active, is_system_role, priority, created_at, updated_at)
-VALUES ('ROLE_ADMIN', '시스템 관리자', '모든 시스템 기능에 대한 전체 권한을 가진 관리자', true, true, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO roles (role_name, display_name, description, priority, is_system_role, is_active, created_at, updated_at)
+VALUES ('ROLE_ADMIN', '시스템 관리자', '시스템 전체에 대한 모든 권한을 가진 최고 관리자', 1, true, true, NOW(), NOW());
 
 -- 부서 관리자 역할
-INSERT INTO roles (role_name, display_name, description, is_active, is_system_role, priority, created_at, updated_at)
-VALUES ('ROLE_MANAGER', '부서 관리자', '부서 내 사용자 관리 및 게시판 관리 권한', true, true, 10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO roles (role_name, display_name, description, priority, is_system_role, is_active, created_at, updated_at)
+VALUES ('ROLE_MANAGER', '부서 관리자', '부서 내 사용자 및 콘텐츠 관리 권한을 가진 관리자', 10, true, true, NOW(), NOW());
 
 -- 게시판 관리자 역할
-INSERT INTO roles (role_name, display_name, description, is_active, is_system_role, priority, created_at, updated_at)
-VALUES ('ROLE_BOARD_ADMIN', '게시판 관리자', '게시판 및 댓글 관리 권한', true, true, 20, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO roles (role_name, display_name, description, priority, is_system_role, is_active, created_at, updated_at)
+VALUES ('ROLE_BOARD_ADMIN', '게시판 관리자', '게시판 콘텐츠 관리 및 모니터링 권한을 가진 관리자', 20, true, true, NOW(), NOW());
 
 -- 일반 사용자 역할
-INSERT INTO roles (role_name, display_name, description, is_active, is_system_role, priority, created_at, updated_at)
-VALUES ('ROLE_USER', '일반 사용자', '기본적인 포털 사용 권한 (게시글 작성, 파일 업로드 등)', true, true, 100, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO roles (role_name, display_name, description, priority, is_system_role, is_active, created_at, updated_at)
+VALUES ('ROLE_USER', '일반 사용자', '기본적인 시스템 이용 권한을 가진 일반 사용자', 100, true, true, NOW(), NOW());
 
--- ==============================================
--- 사용자(User) 초기 데이터 삽입
--- ==============================================
+-- ================================
+-- 사용자(User) 테이블 초기 데이터
+-- ================================
 
--- 비밀번호 참고: 모든 계정의 비밀번호는 "password123" 입니다.
--- BCrypt로 암호화된 해시값: $2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.
--- 실제 운영환경에서는 더 복잡한 비밀번호 사용 필요
+-- 시스템 관리자 계정
+-- 비밀번호: admin123 (BCrypt로 암호화된 해시)
+INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
+VALUES ('admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iKXIGAcPNi4hUMwrCI2GcaGYIv1i', 'admin@kmportal.com', '시스템관리자', 'IT부', '시스템관리자', '010-1234-5678', true, false, false, 0, NOW(), NOW());
 
--- 1. 시스템 관리자 (admin)
-INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, is_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('admin', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.', 'admin@kmportal.com', '시스템 관리자', 'IT팀', '팀장', '02-1234-5678', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+-- 부서 관리자 계정
+-- 비밀번호: manager123 (BCrypt로 암호화된 해시)
+INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
+VALUES ('manager', '$2a$10$8K8mQZ2kuDKZjQDiPYEeje6FuKQs8VdvHkh7q.zBTyNjQqKHHtCu.', 'manager@kmportal.com', '김부장', '영업부', '부장', '010-2345-6789', true, false, false, 0, NOW(), NOW());
 
--- 2. IT팀 매니저 (itmanager)
-INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, is_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('itmanager', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.', 'itmanager@kmportal.com', '김철수', 'IT팀', '과장', '02-1234-5679', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+-- 게시판 관리자 계정
+-- 비밀번호: board123 (BCrypt로 암호화된 해시)
+INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
+VALUES ('board_admin', '$2a$10$7P2L9QDxGkWwM1vN.oFTG.zLXC.8rHUGN1kOqTyI0eKQOiV8GjQdW', 'board@kmportal.com', '박과장', '기획부', '과장', '010-3456-7890', true, false, false, 0, NOW(), NOW());
 
--- 3. 인사팀 매니저 (hrmanager)
-INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, is_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('hrmanager', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.', 'hrmanager@kmportal.com', '이영희', '인사팀', '과장', '02-1234-5680', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+-- 일반 사용자 계정들 (테스트용)
+-- 비밀번호: user123 (BCrypt로 암호화된 해시)
+INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
+VALUES
+('user01', '$2a$10$5H4Q6B7xYzQdLKfT.mNUVeQg8HtSj2nYKdOcRvPq7WnElCpS8jXYu', 'user01@kmportal.com', '이대리', '영업부', '대리', '010-4567-8901', true, false, false, 0, NOW(), NOW()),
+('user02', '$2a$10$5H4Q6B7xYzQdLKfT.mNUVeQg8HtSj2nYKdOcRvPq7WnElCpS8jXYu', 'user02@kmportal.com', '최주임', '마케팅부', '주임', '010-5678-9012', true, false, false, 0, NOW(), NOW()),
+('user03', '$2a$10$5H4Q6B7xYzQdLKfT.mNUVeQg8HtSj2nYKdOcRvPq7WnElCpS8jXYu', 'user03@kmportal.com', '정사원', 'HR부', '사원', '010-6789-0123', true, false, false, 0, NOW(), NOW()),
+('user04', '$2a$10$5H4Q6B7xYzQdLKfT.mNUVeQg8HtSj2nYKdOcRvPq7WnElCpS8jXYu', 'user04@kmportal.com', '한사원', '개발부', '사원', '010-7890-1234', true, false, false, 0, NOW(), NOW());
 
--- 4. 게시판 관리자 (boardadmin)
-INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, is_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('boardadmin', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.', 'boardadmin@kmportal.com', '박미영', '기획팀', '대리', '02-1234-5681', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+-- 비활성 계정 (테스트용)
+INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
+VALUES ('inactive_user', '$2a$10$5H4Q6B7xYzQdLKfT.mNUVeQg8HtSj2nYKdOcRvPq7WnElCpS8jXYu', 'inactive@kmportal.com', '비활성사용자', '기타', '사원', '010-8901-2345', false, false, false, 0, NOW(), NOW());
 
--- 5. 일반 사용자들 (개발 테스트용)
-INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, is_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('user1', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.', 'user1@kmportal.com', '최승호', '영업팀', '사원', '02-1234-5682', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+-- 잠금된 계정 (테스트용)
+INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
+VALUES ('locked_user', '$2a$10$5H4Q6B7xYzQdLKfT.mNUVeQg8HtSj2nYKdOcRvPq7WnElCpS8jXYu', 'locked@kmportal.com', '잠금사용자', '기타', '사원', '010-9012-3456', true, true, false, 5, NOW(), NOW());
 
-INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, is_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('user2', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.', 'user2@kmportal.com', '정수진', '마케팅팀', '사원', '02-1234-5683', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+-- ================================
+-- 사용자-역할 매핑 테이블 데이터
+-- ================================
 
-INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, is_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('user3', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.', 'user3@kmportal.com', '강민수', '재무팀', '주임', '02-1234-5684', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-
--- 6. 비활성화된 사용자 (테스트용)
-INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, is_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('inactiveuser', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.', 'inactive@kmportal.com', '비활성사용자', '퇴사', '전직원', '', false, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-
--- 7. 잠긴 계정 (테스트용)
-INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, is_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('lockeduser', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.', 'locked@kmportal.com', '잠긴계정', 'IT팀', '사원', '02-1234-5685', true, true, false, 5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-
--- ==============================================
--- 사용자-역할 연결 (user_roles) 데이터 삽입
--- ==============================================
-
--- 관리자에게 모든 권한 부여 (ADMIN + MANAGER + BOARD_ADMIN + USER)
+-- admin 사용자에게 ROLE_ADMIN 역할 할당
 INSERT INTO user_roles (user_id, role_id)
 SELECT u.user_id, r.role_id
 FROM users u, roles r
 WHERE u.username = 'admin' AND r.role_name = 'ROLE_ADMIN';
 
+-- manager 사용자에게 ROLE_MANAGER 역할 할당
 INSERT INTO user_roles (user_id, role_id)
 SELECT u.user_id, r.role_id
 FROM users u, roles r
-WHERE u.username = 'admin' AND r.role_name = 'ROLE_USER';
+WHERE u.username = 'manager' AND r.role_name = 'ROLE_MANAGER';
 
--- IT 매니저에게 매니저 + 사용자 권한
+-- board_admin 사용자에게 ROLE_BOARD_ADMIN 역할 할당
 INSERT INTO user_roles (user_id, role_id)
 SELECT u.user_id, r.role_id
 FROM users u, roles r
-WHERE u.username = 'itmanager' AND r.role_name = 'ROLE_MANAGER';
+WHERE u.username = 'board_admin' AND r.role_name = 'ROLE_BOARD_ADMIN';
 
+-- 일반 사용자들에게 ROLE_USER 역할 할당
 INSERT INTO user_roles (user_id, role_id)
 SELECT u.user_id, r.role_id
 FROM users u, roles r
-WHERE u.username = 'itmanager' AND r.role_name = 'ROLE_USER';
-
--- 인사팀 매니저에게 매니저 + 사용자 권한
-INSERT INTO user_roles (user_id, role_id)
-SELECT u.user_id, r.role_id
-FROM users u, roles r
-WHERE u.username = 'hrmanager' AND r.role_name = 'ROLE_MANAGER';
-
-INSERT INTO user_roles (user_id, role_id)
-SELECT u.user_id, r.role_id
-FROM users u, roles r
-WHERE u.username = 'hrmanager' AND r.role_name = 'ROLE_USER';
-
--- 게시판 관리자에게 게시판 관리 + 사용자 권한
-INSERT INTO user_roles (user_id, role_id)
-SELECT u.user_id, r.role_id
-FROM users u, roles r
-WHERE u.username = 'boardadmin' AND r.role_name = 'ROLE_BOARD_ADMIN';
-
-INSERT INTO user_roles (user_id, role_id)
-SELECT u.user_id, r.role_id
-FROM users u, roles r
-WHERE u.username = 'boardadmin' AND r.role_name = 'ROLE_USER';
-
--- 일반 사용자들에게 사용자 권한만 부여
-INSERT INTO user_roles (user_id, role_id)
-SELECT u.user_id, r.role_id
-FROM users u, roles r
-WHERE u.username IN ('user1', 'user2', 'user3', 'inactiveuser', 'lockeduser')
+WHERE u.username IN ('user01', 'user02', 'user03', 'user04', 'inactive_user', 'locked_user')
 AND r.role_name = 'ROLE_USER';
 
--- ==============================================
--- 데이터 삽입 완료 로그
--- ==============================================
+-- manager 사용자에게 추가로 ROLE_USER 권한도 부여 (다중 역할 테스트)
+INSERT INTO user_roles (user_id, role_id)
+SELECT u.user_id, r.role_id
+FROM users u, roles r
+WHERE u.username = 'manager' AND r.role_name = 'ROLE_USER';
 
--- H2 Database에서는 주석도 실행되지 않으므로 SELECT 문으로 확인
--- 개발자 콘솔에서 데이터 삽입 결과 확인 가능
-
--- 삽입된 역할 수 확인
--- SELECT '역할 삽입 완료 - 총 개수:' as message, COUNT(*) as count FROM roles;
-
--- 삽입된 사용자 수 확인
--- SELECT '사용자 삽입 완료 - 총 개수:' as message, COUNT(*) as count FROM users;
-
--- 사용자-역할 연결 수 확인
--- SELECT '사용자-역할 연결 완료 - 총 개수:' as message, COUNT(*) as count FROM user_roles;
-
--- ==============================================
--- 테스트용 계정 정보 요약
--- ==============================================
+-- ================================
+-- 테스트 데이터 검증 쿼리 (주석으로 남겨둠)
+-- ================================
 
 /*
-생성된 테스트 계정 정보:
+-- 생성된 역할 확인
+SELECT role_id, role_name, display_name, priority, is_system_role, is_active
+FROM roles
+ORDER BY priority;
 
-1. admin / password123
-   - 역할: 시스템 관리자
-   - 권한: 모든 기능 접근 가능
-   - 부서: IT팀
+-- 생성된 사용자 확인
+SELECT user_id, username, email, full_name, department, position, is_active, is_locked
+FROM users
+ORDER BY user_id;
 
-2. itmanager / password123
-   - 역할: 부서 관리자
-   - 권한: 부서 관리, 사용자 관리
-   - 부서: IT팀
+-- 사용자-역할 매핑 확인
+SELECT
+    u.username,
+    u.full_name,
+    r.role_name,
+    r.display_name,
+    r.priority
+FROM users u
+JOIN user_roles ur ON u.user_id = ur.user_id
+JOIN roles r ON ur.role_id = r.role_id
+ORDER BY u.username, r.priority;
 
-3. hrmanager / password123
-   - 역할: 부서 관리자
-   - 권한: 부서 관리, 사용자 관리
-   - 부서: 인사팀
+-- 부서별 사용자 수 확인
+SELECT department, COUNT(*) as user_count
+FROM users
+WHERE is_active = true
+GROUP BY department
+ORDER BY user_count DESC;
 
-4. boardadmin / password123
-   - 역할: 게시판 관리자
-   - 권한: 게시판 관리, 댓글 관리
-   - 부서: 기획팀
+-- 역할별 사용자 수 확인
+SELECT
+    r.display_name,
+    COUNT(ur.user_id) as user_count
+FROM roles r
+LEFT JOIN user_roles ur ON r.role_id = ur.role_id
+GROUP BY r.role_id, r.display_name
+ORDER BY r.priority;
+*/
 
-5. user1 / password123
-   - 역할: 일반 사용자
-   - 권한: 기본 포털 기능
-   - 부서: 영업팀
+-- ================================
+-- 개발환경 전용 추가 데이터
+-- ================================
 
-6. user2 / password123
-   - 역할: 일반 사용자
-   - 부서: 마케팅팀
+-- 개발 모드임을 알리는 시스템 설정
+-- (실제 시스템 설정 테이블이 구현되면 사용)
+/*
+INSERT INTO system_settings (setting_key, setting_value, description, created_at, updated_at)
+VALUES
+('ENVIRONMENT', 'DEVELOPMENT', '현재 환경 설정', NOW(), NOW()),
+('DEMO_MODE', 'true', '데모 모드 활성화 여부', NOW(), NOW()),
+('DEBUG_MODE', 'true', '디버그 모드 활성화 여부', NOW(), NOW());
+*/
 
-7. user3 / password123
-   - 역할: 일반 사용자
-   - 부서: 재무팀
+-- 개발용 알림 데이터 (알림 테이블 구현 시 사용)
+/*
+INSERT INTO notifications (title, content, type, target_user_id, is_read, created_at)
+SELECT
+    '시스템 시작 알림',
+    'KM 포털 시스템이 정상적으로 시작되었습니다.',
+    'SYSTEM',
+    user_id,
+    false,
+    NOW()
+FROM users
+WHERE username = 'admin';
+*/
 
-8. inactiveuser / password123
-   - 상태: 비활성화 (로그인 불가)
-   - 테스트용: 계정 상태 테스트
+-- ================================
+-- 패스워드 정보 (개발용 참고사항)
+-- ================================
 
-9. lockeduser / password123
-   - 상태: 계정 잠금 (로그인 불가)
-   - 테스트용: 계정 잠금 테스트
+/*
+테스트 계정 로그인 정보:
 
-개발 환경에서 이 계정들로 다양한 권한 레벨 테스트 가능
+1. 시스템 관리자
+   - ID: admin
+   - PW: admin123
+   - 권한: 시스템 전체 관리
+
+2. 부서 관리자
+   - ID: manager
+   - PW: manager123
+   - 권한: 부서 관리 + 일반 사용
+
+3. 게시판 관리자
+   - ID: board_admin
+   - PW: board123
+   - 권한: 게시판 관리
+
+4. 일반 사용자 (user01~user04)
+   - ID: user01, user02, user03, user04
+   - PW: user123
+   - 권한: 기본 사용자
+
+5. 테스트 계정
+   - inactive_user: 비활성 계정 (로그인 불가)
+   - locked_user: 잠금 계정 (로그인 불가)
+
+주의: 운영환경에서는 반드시 기본 비밀번호를 변경하세요!
 */
