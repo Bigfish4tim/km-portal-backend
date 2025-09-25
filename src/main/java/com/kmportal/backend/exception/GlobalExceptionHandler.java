@@ -146,7 +146,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
      * @param request 웹 요청 정보
      * @return 422 Unprocessable Entity 응답
      */
-    @ExceptionHandler(MethodArgumentNotValidException.class)
+    //@ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<List<String>>> handleMethodArgumentNotValidException(
             MethodArgumentNotValidException ex, WebRequest request) {
 

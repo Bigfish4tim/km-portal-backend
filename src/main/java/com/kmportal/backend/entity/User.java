@@ -136,6 +136,13 @@ public class User implements UserDetails {
     private Integer failedLoginAttempts = 0;
 
     /**
+     * 계정 잠금 시간 - AuthService에서 사용하는 필드
+     * 계정이 잠금된 정확한 시간을 기록하여 자동 해제 정책에 활용
+     */
+    @Column(name = "locked_at") // 추가: AuthService.java의 setLockedAt() 호출을 위한 필드
+    private LocalDateTime lockedAt;
+
+    /**
      * 계정 생성 시간 (자동 설정)
      * Hibernate가 엔티티 저장 시 자동으로 현재 시간 설정
      */
@@ -252,6 +259,11 @@ public class User implements UserDetails {
     public void onLoginSuccess() {
         this.lastLoginAt = LocalDateTime.now();
         this.failedLoginAttempts = 0;
+        // 로그인 성공 시 잠금 해제
+        if (this.isLocked) {
+            this.isLocked = false;
+            this.lockedAt = null;
+        }
     }
 
     /**
@@ -264,6 +276,7 @@ public class User implements UserDetails {
         this.failedLoginAttempts++;
         if (this.failedLoginAttempts >= maxAttempts) {
             this.isLocked = true;
+            this.lockedAt = LocalDateTime.now(); // 잠금 시간 기록
         }
     }
 
@@ -273,6 +286,7 @@ public class User implements UserDetails {
     public void unlock() {
         this.isLocked = false;
         this.failedLoginAttempts = 0;
+        this.lockedAt = null; // 잠금 해제 시 잠금 시간도 초기화
     }
 
     // ================================
@@ -375,6 +389,22 @@ public class User implements UserDetails {
 
     public Integer getFailedLoginAttempts() { return failedLoginAttempts; }
     public void setFailedLoginAttempts(Integer failedLoginAttempts) { this.failedLoginAttempts = failedLoginAttempts; }
+
+    /**
+     * 계정 잠금 시간 getter - AuthService에서 사용
+     * @return 계정이 잠금된 시간
+     */
+    public LocalDateTime getLockedAt() { // 추가: AuthService.java에서 호출하는 getter
+        return lockedAt;
+    }
+
+    /**
+     * 계정 잠금 시간 setter - AuthService에서 사용
+     * @param lockedAt 계정 잠금 시간
+     */
+    public void setLockedAt(LocalDateTime lockedAt) { // 추가: AuthService.java에서 호출하는 setter
+        this.lockedAt = lockedAt;
+    }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

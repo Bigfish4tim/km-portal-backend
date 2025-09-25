@@ -1,94 +1,338 @@
-# KM 포털 - Spring Boot 애플리케이션 설정파일
-# 공통 설정 (모든 환경에서 적용되는 기본 설정)
+# KM 포털 백엔드 애플리케이션 설정
+# Spring Boot 3.5.5 + JWT 인증 시스템 설정
 
+# ===== 서버 설정 =====
+server:
+  port: 8080  # 프론트엔드(8080)와 구분하기 위한 포트
+  servlet:
+    context-path: /
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+  error:
+    include-message: always
+    include-binding-errors: always
+
+# ===== Spring 기본 설정 =====
 spring:
-  # 활성 프로필 설정 (개발환경: dev, 운영환경: prod)
+  # 애플리케이션 정보
+  application:
+    name: km-portal-backend
+
+  # 프로파일 설정 (기본값: dev)
   profiles:
     active: dev
 
-  # JPA 및 Hibernate 설정
+  # 데이터베이스 설정
+  datasource:
+    # H2 인메모리 데이터베이스 (개발용)
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=MySQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+    # 커넥션 풀 설정 (HikariCP)
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      auto-commit: true
+      pool-name: KMPortalHikariCP
+
+  # JPA/Hibernate 설정
   jpa:
-    # Hibernate 방언 설정 (데이터베이스 종류에 따른 SQL 방언)
-    database-platform: org.hibernate.dialect.H2Dialect
-
-    # JPA Hibernate 상세 설정
     hibernate:
-      # DDL 자동 생성 옵션
-      # create: 기존 테이블 삭제 후 새로 생성
-      # create-drop: create + 애플리케이션 종료시 테이블 삭제
-      # update: 기존 테이블 유지하고 변경사항만 적용
-      # validate: 엔티티와 테이블 매핑 검증만 수행
-      ddl-auto: create-drop
-
-      # 물리적 네이밍 전략 (테이블명, 컬럼명 생성 규칙)
-      # SpringPhysicalNamingStrategy: camelCase -> snake_case 변환
-      physical-strategy: org.hibernate.boot.model.naming.SpringPhysicalNamingStrategy
-
-      # 암시적 네이밍 전략 (명시되지 않은 이름 생성 규칙)
-      implicit-strategy: org.hibernate.boot.model.naming.SpringImplicitNamingStrategy
-
-    # JPA 실행 쿼리 출력 (개발시 유용)
-    show-sql: true
-
-    # JPA 구현체 프로퍼티
+      ddl-auto: create-drop  # 개발환경: 매번 테이블 재생성
+    show-sql: true          # SQL 로그 출력
     properties:
       hibernate:
-        # SQL 쿼리 포맷팅 (읽기 쉽게 정렬)
-        format_sql: true
-        # SQL 주석 표시 (어떤 엔티티에서 실행된 쿼리인지 표시)
-        use_sql_comments: true
-        # JDBC 배치 처리 최적화
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true    # SQL 포맷팅
+        use_sql_comments: true  # SQL 주석 출력
         jdbc:
-          batch_size: 20
-        # 2차 캐시 설정
-        cache:
-          use_second_level_cache: false
+          batch_size: 20    # 배치 처리 크기
+        order_inserts: true # INSERT 순서 최적화
+        order_updates: true # UPDATE 순서 최적화
+    defer-datasource-initialization: true  # 데이터 초기화 지연
 
-  # 데이터베이스 초기화 설정
+  # SQL 초기화 설정
   sql:
     init:
-      # 스키마 초기화 모드 (always: 항상, never: 안함, embedded: 임베디드DB만)
-      mode: always
-      # 스키마 파일 경로
-      schema-locations: classpath:schema.sql
-      # 데이터 파일 경로
-      data-locations: classpath:data-dev.sql
-      # 초기화 순서 (hibernate 이후 실행)
-      defer-datasource-initialization: true
+      mode: always        # 항상 초기 데이터 로드
+      data-locations: classpath:data-dev.sql  # 초기 데이터 파일
+      encoding: UTF-8
 
-# JPA 관련 로깅 설정
+  # H2 데이터베이스 콘솔 설정 (개발용)
+  h2:
+    console:
+      enabled: true       # H2 콘솔 활성화
+      path: /h2-console   # 접속 경로
+      settings:
+        web-allow-others: true  # 외부 접속 차단 (보안)
+        trace: false            # 트레이스 비활성화
+
+  # Jackson JSON 설정
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false  # 날짜를 ISO 8601 형식으로
+      indent-output: true               # JSON 출력 포맷팅 (개발용)
+    deserialization:
+      fail-on-unknown-properties: false # 알 수 없는 속성 무시
+    property-naming-strategy: SNAKE_CASE  # 속성명을 snake_case로 (선택사항)
+    time-zone: Asia/Seoul                 # 시간대 설정
+
+  # 파일 업로드 설정
+  servlet:
+    multipart:
+      max-file-size: 50MB       # 단일 파일 최대 크기
+      max-request-size: 100MB   # 전체 요청 최대 크기
+      enabled: true             # 멀티파트 업로드 활성화
+
+  # 메시지 소스 설정 (국제화)
+  messages:
+    basename: messages
+    encoding: UTF-8
+    cache-duration: 3600  # 1시간 캐시
+
+# ===== JWT 토큰 설정 =====
+jwt:
+  # JWT 서명용 비밀키 (실제 운영에서는 환경변수로 설정)
+  secret: myVerySecretKeyForKMPortal2025!@#$%^&*()_+1234567890
+
+  # 토큰 만료 시간 설정 (밀리초 단위)
+  expiration:
+    access-token: 86400000    # 24시간 (24 * 60 * 60 * 1000)
+    refresh-token: 604800000  # 7일 (7 * 24 * 60 * 60 * 1000)
+
+  # 토큰 헤더 설정
+  header:
+    authorization: Authorization  # 토큰이 포함될 헤더명
+    prefix: "Bearer "            # 토큰 접두사
+
+  # JWT 발급자 정보
+  issuer: km-portal-backend
+
+  # 토큰 갱신 관련 설정
+  refresh:
+    enabled: true               # 리프레시 토큰 활성화
+    auto-refresh-threshold: 300000  # 5분 전에 자동 갱신 (5 * 60 * 1000)
+
+# ===== 로깅 설정 =====
 logging:
   level:
-    # JPA/Hibernate 관련 로그 레벨
-    org.hibernate.SQL: DEBUG                    # 실행되는 SQL 쿼리 출력
-    org.hibernate.type.descriptor.sql: TRACE    # SQL 파라미터 바인딩 값 출력
-    org.hibernate.orm.jdbc.bind: TRACE          # JDBC 바인딩 파라미터 출력
-    org.springframework.orm.jpa: DEBUG          # Spring JPA 로그
-    org.springframework.transaction: DEBUG       # 트랜잭션 로그
-
-    # 애플리케이션 패키지 로그 레벨
-    com.kmportal: DEBUG
-
-    # 루트 로그 레벨
     root: INFO
+    com.kmportal.backend: DEBUG           # 애플리케이션 로그 레벨
+    org.springframework.web: DEBUG        # Spring Web 로그
+    org.springframework.security: DEBUG   # Spring Security 로그
+    org.hibernate.SQL: DEBUG             # SQL 로그
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE  # SQL 파라미터 로그
+    io.jsonwebtoken: DEBUG                # JWT 라이브러리 로그
 
-# 서버 설정
-server:
-  port: 8080
-  servlet:
-    context-path: /api
-    encoding:
-      charset: UTF-8
-      force: true
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
 
-# 매니지먼트 엔드포인트 (모니터링, 헬스체크 등)
+  file:
+    name: logs/km-portal.log
+    max-size: 100MB
+    max-history: 30
+
+# ===== 보안 설정 =====
+security:
+  # 비밀번호 정책
+  password:
+    min-length: 4           # 최소 길이 (개발용으로 짧게 설정)
+    max-length: 100         # 최대 길이
+    require-uppercase: false # 대문자 필수 여부
+    require-lowercase: false # 소문자 필수 여부
+    require-numbers: false   # 숫자 필수 여부
+    require-special: false   # 특수문자 필수 여부
+
+  # 계정 잠금 정책
+  account-lock:
+    max-failed-attempts: 5  # 최대 로그인 실패 횟수
+    lock-duration: 1800     # 잠금 시간 (초) - 30분
+
+  # CORS 설정
+  cors:
+    allowed-origins:
+      - http://localhost:8080   # Vue.js 개발 서버
+      - http://127.0.0.1:8080
+      - http://localhost:3000   # 대체 포트
+    allowed-methods:
+      - GET
+      - POST
+      - PUT
+      - PATCH
+      - DELETE
+      - OPTIONS
+    allowed-headers:
+      - "*"
+    allow-credentials: true
+    max-age: 3600
+
+# ===== 파일 관리 설정 =====
+file:
+  storage:
+    # 파일 저장 경로 (개발환경)
+    path: ${user.home}/km-portal-files
+
+    # 허용 파일 확장자
+    allowed-extensions:
+      - jpg
+      - jpeg
+      - png
+      - gif
+      - bmp
+      - pdf
+      - doc
+      - docx
+      - xls
+      - xlsx
+      - ppt
+      - pptx
+      - txt
+      - hwp
+      - zip
+      - rar
+
+    # 파일 크기 제한
+    max-size: 50MB          # 개별 파일 최대 크기
+    max-total-size: 500MB   # 사용자당 전체 파일 크기 제한
+
+# ===== 애플리케이션 커스텀 설정 =====
+app:
+  # 애플리케이션 정보
+  name: KM 포털
+  version: 1.0.0
+  description: "지식관리 통합 업무 시스템"
+
+  # 개발 모드 설정
+  dev:
+    enabled: true                    # 개발 모드 활성화
+    create-test-data: true          # 테스트 데이터 생성
+    enable-swagger: true            # API 문서 활성화
+    show-sql-queries: true          # SQL 쿼리 표시
+
+  # 사용자 설정
+  user:
+    default-role: ROLE_USER         # 기본 사용자 권한
+    auto-activate: true             # 신규 사용자 자동 활성화
+    require-email-verification: false  # 이메일 인증 필수 여부
+
+  # 메일 설정 (향후 구현용)
+  mail:
+    enabled: false                  # 메일 기능 활성화 여부
+    smtp:
+      host: smtp.gmail.com
+      port: 587
+      username: ${MAIL_USERNAME:}
+      password: ${MAIL_PASSWORD:}
+      auth: true
+      starttls: true
+
+  # 캐시 설정
+  cache:
+    enabled: true                   # 캐시 활성화
+    default-ttl: 3600              # 기본 TTL (초)
+    max-entries: 10000             # 최대 엔트리 수
+
+# ===== Actuator 설정 (모니터링) =====
 management:
   endpoints:
     web:
       exposure:
-        # 개발환경에서 모든 엔드포인트 노출
-        include: "*"
+        include: health,info,metrics,env,beans  # 노출할 엔드포인트
+      base-path: /actuator
   endpoint:
     health:
-      # 헬스체크 상세 정보 표시
-      show-details: always
+      show-details: when-authorized  # 인증된 사용자에게만 상세 정보 표시
+      show-components: always
+  info:
+    env:
+      enabled: true
+
+# ===== 개발 환경별 설정 분리 =====
+---
+# 개발 환경 설정
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+# 개발환경용 로그 레벨 조정
+logging:
+  level:
+    com.kmportal.backend: DEBUG
+    org.springframework.web: INFO
+    org.springframework.security: DEBUG
+
+# 개발환경용 JWT 설정 (짧은 만료시간)
+jwt:
+  expiration:
+    access-token: 3600000    # 1시간 (개발시 편의를 위해 짧게)
+    refresh-token: 86400000  # 24시간
+
+---
+
+# 테스트용 데이터베이스 (별도 인메모리 DB)
+spring:
+  config:
+    activate:
+      on-profile: test
+  datasource:
+    url: jdbc:h2:mem:testdb-test
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false  # 테스트시 SQL 로그 숨김
+
+# 테스트용 로그 레벨
+logging:
+  level:
+    root: WARN
+    com.kmportal.backend: INFO
+
+---
+# 프로덕션 환경 설정 (향후 사용)
+#spring:
+#  config:
+#    activate:
+#      on-profile: prod
+
+# 프로덕션용 데이터베이스 (MSSQL)
+#spring:
+#  datasource:
+#    url: ${DB_URL:jdbc:sqlserver://localhost:1433;databaseName=kmportal}
+#    username: ${DB_USERNAME:kmportal_user}
+#    password: ${DB_PASSWORD:kmportal_pass}
+#    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+#
+#  jpa:
+#    hibernate:
+#      ddl-auto: validate  # 프로덕션에서는 스키마 변경 금지
+#    show-sql: false       # SQL 로그 비활성화
+
+# 프로덕션용 로그 설정
+logging:
+  level:
+    root: WARN
+    com.kmportal.backend: INFO
+    org.springframework.web: WARN
+    org.springframework.security: WARN
+
+# 프로덕션용 보안 강화
+jwt:
+  secret: ${JWT_SECRET}  # 환경변수에서 반드시 가져오기
+  expiration:
+    access-token: 1800000    # 30분 (보안 강화)
+    refresh-token: 604800000 # 7일
+
+## H2 콘솔 비활성화
+#spring:
+#  h2:
+#    console:
+#      enabled: false

@@ -1,5 +1,8 @@
 package com.kmportal.backend.config;
 
+import com.kmportal.backend.filter.JwtAuthenticationFilter;
+import com.kmportal.backend.util.JwtUtil;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -9,48 +12,75 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 /**
- * Spring Security 설정 클래스 (기본 구성)
+ * Spring Security 보안 설정 클래스
  *
- * 현재는 2일차 기본 구성으로, 모든 요청을 허용하고 기본 설정만 제공합니다.
- * 향후 6일차(JWT 설정)에서 본격적인 인증/인가 설정을 추가할 예정입니다.
+ * 이 클래스는 애플리케이션의 모든 보안 정책을 정의합니다:
+ * - JWT 기반 인증 시스템 구성
+ * - API 엔드포인트별 접근 권한 설정
+ * - CORS 정책 적용
+ * - 세션 정책 (Stateless) 설정
+ * - 비밀번호 암호화 설정
+ * - 메서드 레벨 보안 활성화
  *
- * 현재 설정의 목적:
- * 1. Spring Security 기본 구조 마련
- * 2. 비밀번호 인코더 설정
- * 3. CORS 및 기본 보안 헤더 설정
- * 4. 개발 환경에서의 편의성 제공 (모든 요청 허용)
+ * JWT를 사용하므로 전통적인 세션 기반 인증은 비활성화하고,
+ * 모든 요청은 토큰을 통해 인증됩니다.
  *
- * @Configuration: 이 클래스가 Spring 설정 클래스임을 나타냄
- * @EnableWebSecurity: Spring Security 웹 보안 활성화
- * @EnableMethodSecurity: 메서드 레벨 보안 활성화 (향후 @PreAuthorize 등 사용)
+ * @author KM Portal Team
+ * @version 1.0
+ * @since 2025-09-24
  */
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity(prePostEnabled = true) // @PreAuthorize, @PostAuthorize 활성화
+@EnableMethodSecurity(
+        prePostEnabled = true,  // @PreAuthorize, @PostAuthorize 활성화
+        securedEnabled = true,  // @Secured 활성화
+        jsr250Enabled = true    // @RolesAllowed 활성화
+)
 public class SecurityConfig {
 
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    @Autowired
+    private CorsConfigurationSource corsConfigurationSource;
+
     /**
-     * 비밀번호 인코더 빈 등록
+     * 비밀번호 암호화를 위한 PasswordEncoder Bean 생성
      *
-     * BCryptPasswordEncoder를 사용하여 안전한 비밀번호 해싱 제공
-     * BCrypt는 다음과 같은 장점이 있습니다:
-     * 1. Salt 자동 생성으로 레인보우 테이블 공격 방지
-     * 2. 적응형 해싱으로 시간이 지나도 보안 강도 유지 가능
-     * 3. Spring Security에서 권장하는 표준 방식
+     * BCrypt 알고리즘을 사용하여 비밀번호를 안전하게 해시화합니다.
+     * BCrypt는 salt를 자동으로 생성하고 적응형 함수로 설계되어
+     * 무차별 대입 공격에 강한 저항성을 가집니다.
      *
-     * @return BCryptPasswordEncoder 인스턴스
+     * @return BCryptPasswordEncoder 비밀번호 인코더
      */
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+        // strength 12: 충분히 안전하면서도 성능을 고려한 설정
+        return new BCryptPasswordEncoder(12);
     }
 
     /**
-     * Spring Security 필터 체인 설정 (2일차 간소화 버전)
+     * JWT 인증 필터 Bean 생성
      *
-     * 2일차에서는 기본 동작에 집중하고, 복잡한 보안 설정은 6일차에 추가
+     * 모든 HTTP 요청에서 JWT 토큰을 검증하고 인증 정보를 설정하는
+     * 커스텀 필터를 생성합니다.
+     *
+     * @return JwtAuthenticationFilter JWT 인증 필터 인스턴스
+     */
+    @Bean
+    public JwtAuthenticationFilter jwtAuthenticationFilter() {
+        return new JwtAuthenticationFilter(jwtUtil);
+    }
+
+    /**
+     * Spring Security 메인 설정
+     *
+     * 모든 HTTP 보안 정책을 정의하는 SecurityFilterChain을 구성합니다.
+     * JWT 기반 인증, CORS, 세션 관리, 권한 설정 등을 포함합니다.
      *
      * @param http HttpSecurity 설정 객체
      * @return SecurityFilterChain 보안 필터 체인
@@ -58,113 +88,117 @@ public class SecurityConfig {
      */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-
         http
-                // ====== CSRF 비활성화 (REST API용) ======
+                // CSRF 보호 비활성화 (JWT 사용으로 불필요)
                 .csrf(csrf -> csrf.disable())
 
-                // ====== 세션 비활성화 (JWT 사용 예정) ======
-                .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                )
+                // CORS 설정 적용
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
 
-                // ====== CORS 활성화 ======
-                .cors(cors -> cors
-                        .configurationSource(corsConfigurationSource())
-                )
+                // 세션 정책: STATELESS (세션 사용하지 않음)
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-                // ====== 2일차 개발 단계: 모든 요청 허용 ======
+                // HTTP 요청별 인증 규칙 설정
                 .authorizeHttpRequests(authz -> authz
+
+                        // ===== 공개 접근 허용 엔드포인트 =====
+
+                        // 인증 관련 API (로그인, 토큰 갱신 등)
+                        .requestMatchers("/api/auth/**").permitAll()
+
+                        // 공개 정보 조회 API
+                        .requestMatchers("/api/public/**").permitAll()
+
+                        // 개발/운영 모니터링 엔드포인트
+                        .requestMatchers("/actuator/health").permitAll()
+                        .requestMatchers("/actuator/info").permitAll()
+
+                        // 개발용 H2 데이터베이스 콘솔 (프로덕션에서는 제거)
+                        .requestMatchers("/h2-console/**").permitAll()
+
+                        // 정적 리소스 (CSS, JS, 이미지 등)
+                        .requestMatchers("/css/**", "/js/**", "/images/**", "/favicon.ico").permitAll()
+
+                        // API 문서 (Swagger 등, 개발 환경에서만)
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+
+                        // ===== 관리자 전용 엔드포인트 =====
+
+                        // 사용자 관리 API (관리자만 접근 가능)
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+
+                        // 시스템 관리 API
+                        .requestMatchers("/api/system/**").hasRole("ADMIN")
+
+                        // 역할 관리 API
+                        .requestMatchers("/api/roles/**").hasAnyRole("ADMIN", "MANAGER")
+
+                        // ===== 매니저 이상 권한 필요 엔드포인트 =====
+
+                        // 사용자 관리 API (매니저 이상)
+                        .requestMatchers("/api/users/create").hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers("/api/users/*/lock").hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers("/api/users/*/unlock").hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers("/api/users/*/roles").hasAnyRole("ADMIN", "MANAGER")
+
+                        // 게시판 관리 API
+                        .requestMatchers("/api/boards/*/admin/**").hasAnyRole("ADMIN", "BOARD_ADMIN")
+
+                        // ===== 인증된 사용자 접근 가능 엔드포인트 =====
+
+                        // 기본 사용자 정보 조회/수정
+                        .requestMatchers("/api/users/me").authenticated()
+                        .requestMatchers("/api/users/profile").authenticated()
+
+                        // 일반 사용자 조회 (읽기 전용)
+                        .requestMatchers("/api/users").hasAnyRole("ADMIN", "MANAGER", "USER")
+                        .requestMatchers("/api/users/*").hasAnyRole("ADMIN", "MANAGER", "USER")
+
+                        // 파일 관리 API
+                        .requestMatchers("/api/files/upload").authenticated()
+                        .requestMatchers("/api/files/download/*").authenticated()
+                        .requestMatchers("/api/files/delete/*").authenticated()
+
+                        // 게시판 API
+                        .requestMatchers("/api/boards/**").authenticated()
+                        .requestMatchers("/api/posts/**").authenticated()
+                        .requestMatchers("/api/comments/**").authenticated()
+
+                        // 대시보드 및 통계 API
+                        .requestMatchers("/api/dashboard/**").authenticated()
+                        .requestMatchers("/api/statistics/**").authenticated()
+
+                        // 알림 API
+                        .requestMatchers("/api/notifications/**").authenticated()
+
+                        // ===== 기타 모든 API 요청 =====
+
+                        // 위에 정의되지 않은 모든 API는 인증 필요
+                        .requestMatchers("/api/**").authenticated()
+
+                        // 그 외 모든 요청은 허용 (프론트엔드 라우팅)
                         .anyRequest().permitAll()
+                )
+
+                // ===== HTTP 보안 헤더 설정 =====
+                .headers(headers -> headers
+                        // X-Frame-Options: H2 콘솔을 위해 sameOrigin으로 설정
+                        .frameOptions(frame -> frame.sameOrigin()) // 수정: H2 콘솔 iframe 허용
+
+                        // X-Content-Type-Options: MIME 타입 스니핑 방지
+                        .contentTypeOptions(contentType -> {})
                 );
+
+        // ===== 커스텀 JWT 인증 필터 추가 =====
+
+        // UsernamePasswordAuthenticationFilter 앞에 JWT 필터 추가
+        // 이렇게 하면 모든 요청이 JWT 필터를 먼저 거치게 됩니다
+        http.addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
-    /**
-     * CORS 설정 정의
-     *
-     * 프론트엔드(Vue.js)와 백엔드(Spring Boot) 간의 크로스 오리진 요청 허용
-     * 개발 환경에서는 모든 오리진 허용, 운영 환경에서는 특정 도메인만 허용
-     *
-     * @return CorsConfigurationSource CORS 설정 소스
-     */
-    @Bean
-    public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {
-        org.springframework.web.cors.CorsConfiguration configuration =
-                new org.springframework.web.cors.CorsConfiguration();
-
-        // 허용할 오리진 설정
-        if ("development".equals(System.getProperty("spring.profiles.active", "dev"))) {
-            // 개발 환경: 로컬 Vue.js 개발 서버 허용
-            configuration.addAllowedOrigin("http://localhost:8080");     // Vue CLI 개발 서버
-            configuration.addAllowedOrigin("http://localhost:3000");     // 추가 개발 포트
-            configuration.addAllowedOrigin("http://127.0.0.1:8080");
-        } else {
-            // 운영 환경: 실제 도메인만 허용 (향후 설정)
-            // configuration.addAllowedOrigin("https://your-domain.com");
-            configuration.addAllowedOriginPattern("*"); // 임시로 모든 오리진 허용
-        }
-
-        // 허용할 HTTP 메서드
-        configuration.addAllowedMethod("GET");
-        configuration.addAllowedMethod("POST");
-        configuration.addAllowedMethod("PUT");
-        configuration.addAllowedMethod("PATCH");
-        configuration.addAllowedMethod("DELETE");
-        configuration.addAllowedMethod("OPTIONS");
-
-        // 허용할 헤더
-        configuration.addAllowedHeader("*"); // 모든 헤더 허용
-
-        // 인증 정보 포함 허용 (JWT 토큰 사용시 필요)
-        configuration.setAllowCredentials(false); // JWT 사용시 false로 설정
-
-        // preflight 요청 캐시 시간 (초)
-        configuration.setMaxAge(3600L);
-
-        org.springframework.web.cors.UrlBasedCorsConfigurationSource source =
-                new org.springframework.web.cors.UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
-
-        return source;
-    }
+    // H2 콘솔용 별도 필터 체인 제거 (충돌 방지)
+    // 메인 필터 체인에서 /h2-console/** 경로를 permitAll()로 처리함
 }
-
-/*
- * ====== 향후 추가될 설정들 (6일차 JWT 구현시) ======
- *
- * 1. JWT 인증 필터:
- *    @Bean
- *    public JwtAuthenticationFilter jwtAuthenticationFilter() {
- *        return new JwtAuthenticationFilter();
- *    }
- *
- * 2. AuthenticationManager 설정:
- *    @Bean
- *    public AuthenticationManager authenticationManager(
- *            AuthenticationConfiguration config) throws Exception {
- *        return config.getAuthenticationManager();
- *    }
- *
- * 3. UserDetailsService 구현:
- *    @Bean
- *    public UserDetailsService userDetailsService() {
- *        return new CustomUserDetailsService();
- *    }
- *
- * 4. 상세 권한 설정:
- *    .authorizeHttpRequests(authz -> authz
- *        .requestMatchers("/api/admin/**").hasRole("ADMIN")
- *        .requestMatchers("/api/manager/**").hasAnyRole("ADMIN", "MANAGER")
- *        .requestMatchers(HttpMethod.GET, "/api/boards/**").hasRole("USER")
- *        .requestMatchers(HttpMethod.POST, "/api/boards/**").hasRole("USER")
- *        .anyRequest().authenticated()
- *    )
- *
- * 5. 예외 처리:
- *    .exceptionHandling(exceptions -> exceptions
- *        .authenticationEntryPoint(new JwtAuthenticationEntryPoint())
- *        .accessDeniedHandler(new JwtAccessDeniedHandler())
- *    )
- */
