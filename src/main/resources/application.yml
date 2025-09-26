@@ -159,9 +159,9 @@ security:
   # CORS 설정
   cors:
     allowed-origins:
-      - http://localhost:8080   # Vue.js 개발 서버
-      - http://127.0.0.1:8080
-      - http://localhost:3000   # 대체 포트
+      - http://localhost:3000   # Vue.js 개발 서버 (메인)
+      - http://127.0.0.1:3000
+      - http://localhost:8080   # 대체 포트
     allowed-methods:
       - GET
       - POST
