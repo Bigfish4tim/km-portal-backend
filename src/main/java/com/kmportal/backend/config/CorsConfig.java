@@ -41,9 +41,10 @@ public class CorsConfig {
         // 개발 환경에서 허용할 Origin들을 설정
         // Vue CLI 개발 서버의 기본 포트들을 포함
         configuration.setAllowedOriginPatterns(Arrays.asList(
-                "http://localhost:3000",    // Vue CLI 기본 개발 서버 포트
-                "http://127.0.0.1:3000"    // IP 주소 접근
+                "http://localhost:3000",    // Vue.js 개발 서버 (localhost)
+                "http://127.0.0.1:3000"    // Vue.js 개발 서버 (IP 주소)
         ));
+
 
         // 허용할 HTTP 메서드들을 설정
         // RESTful API의 모든 기본 메서드를 포함

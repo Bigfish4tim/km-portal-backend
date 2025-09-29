@@ -3,7 +3,7 @@
 
 # ===== 서버 설정 =====
 server:
-  port: 8080  # 프론트엔드(8080)와 구분하기 위한 포트
+  port: 8080  # 백엔드 API 서버 포트
   servlet:
     context-path: /
     encoding:
@@ -19,10 +19,6 @@ spring:
   # 애플리케이션 정보
   application:
     name: km-portal-backend
-
-  # 프로파일 설정 (기본값: dev)
-  profiles:
-    active: dev
 
   # 데이터베이스 설정
   datasource:
@@ -44,6 +40,7 @@ spring:
 
   # JPA/Hibernate 설정
   jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
       ddl-auto: create-drop  # 개발환경: 매번 테이블 재생성
     show-sql: true          # SQL 로그 출력
@@ -71,7 +68,7 @@ spring:
       enabled: true       # H2 콘솔 활성화
       path: /h2-console   # 접속 경로
       settings:
-        web-allow-others: true  # 외부 접속 차단 (보안)
+        web-allow-others: true  # 외부 접속 허용 (개발용)
         trace: false            # 트레이스 비활성화
 
   # Jackson JSON 설정
@@ -128,6 +125,8 @@ logging:
     org.springframework.web: DEBUG        # Spring Web 로그
     org.springframework.security: DEBUG   # Spring Security 로그
     org.hibernate.SQL: DEBUG             # SQL 로그
+    org.hibernate: DEBUG
+    org.h2: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE  # SQL 파라미터 로그
     io.jsonwebtoken: DEBUG                # JWT 라이브러리 로그
 
@@ -156,12 +155,11 @@ security:
     max-failed-attempts: 5  # 최대 로그인 실패 횟수
     lock-duration: 1800     # 잠금 시간 (초) - 30분
 
-  # CORS 설정
+  # CORS 설정 (수정된 부분)
   cors:
     allowed-origins:
-      - http://localhost:3000   # Vue.js 개발 서버 (메인)
+      - http://localhost:3000   # Vue.js 개발 서버
       - http://127.0.0.1:3000
-      - http://localhost:8080   # 대체 포트
     allowed-methods:
       - GET
       - POST
@@ -254,85 +252,3 @@ management:
   info:
     env:
       enabled: true
-
-# ===== 개발 환경별 설정 분리 =====
----
-# 개발 환경 설정
-spring:
-  config:
-    activate:
-      on-profile: dev
-
-# 개발환경용 로그 레벨 조정
-logging:
-  level:
-    com.kmportal.backend: DEBUG
-    org.springframework.web: INFO
-    org.springframework.security: DEBUG
-
-# 개발환경용 JWT 설정 (짧은 만료시간)
-jwt:
-  expiration:
-    access-token: 3600000    # 1시간 (개발시 편의를 위해 짧게)
-    refresh-token: 86400000  # 24시간
-
----
-
-# 테스트용 데이터베이스 (별도 인메모리 DB)
-spring:
-  config:
-    activate:
-      on-profile: test
-  datasource:
-    url: jdbc:h2:mem:testdb-test
-  jpa:
-    hibernate:
-      ddl-auto: create-drop
-    show-sql: false  # 테스트시 SQL 로그 숨김
-
-# 테스트용 로그 레벨
-logging:
-  level:
-    root: WARN
-    com.kmportal.backend: INFO
-
----
-# 프로덕션 환경 설정 (향후 사용)
-#spring:
-#  config:
-#    activate:
-#      on-profile: prod
-
-# 프로덕션용 데이터베이스 (MSSQL)
-#spring:
-#  datasource:
-#    url: ${DB_URL:jdbc:sqlserver://localhost:1433;databaseName=kmportal}
-#    username: ${DB_USERNAME:kmportal_user}
-#    password: ${DB_PASSWORD:kmportal_pass}
-#    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
-#
-#  jpa:
-#    hibernate:
-#      ddl-auto: validate  # 프로덕션에서는 스키마 변경 금지
-#    show-sql: false       # SQL 로그 비활성화
-
-# 프로덕션용 로그 설정
-logging:
-  level:
-    root: WARN
-    com.kmportal.backend: INFO
-    org.springframework.web: WARN
-    org.springframework.security: WARN
-
-# 프로덕션용 보안 강화
-jwt:
-  secret: ${JWT_SECRET}  # 환경변수에서 반드시 가져오기
-  expiration:
-    access-token: 1800000    # 30분 (보안 강화)
-    refresh-token: 604800000 # 7일
-
-## H2 콘솔 비활성화
-#spring:
-#  h2:
-#    console:
-#      enabled: false
