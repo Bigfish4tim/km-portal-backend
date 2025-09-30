@@ -78,7 +78,7 @@ spring:
       indent-output: true               # JSON 출력 포맷팅 (개발용)
     deserialization:
       fail-on-unknown-properties: false # 알 수 없는 속성 무시
-    property-naming-strategy: SNAKE_CASE  # 속성명을 snake_case로 (선택사항)
+    property-naming-strategy: LOWER_CAMEL_CASE
     time-zone: Asia/Seoul                 # 시간대 설정
 
   # 파일 업로드 설정

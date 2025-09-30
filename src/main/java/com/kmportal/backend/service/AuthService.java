@@ -312,6 +312,10 @@ public class AuthService {
         private String refreshToken;
         private UserInfo userInfo;
 
+        // ⭐ 기본 생성자 추가 (Jackson 직렬화를 위해 필수!)
+        public LoginResponse() {
+        }
+
         // 생성자들
         private LoginResponse(boolean success, String message) {
             this.success = success;
@@ -347,6 +351,13 @@ public class AuthService {
         public String getAccessToken() { return accessToken; }
         public String getRefreshToken() { return refreshToken; }
         public UserInfo getUserInfo() { return userInfo; }
+
+        // ⭐ Setter 메서드들 추가 (Jackson 직렬화를 위해 필수!)
+        public void setSuccess(boolean success) { this.success = success; }
+        public void setMessage(String message) { this.message = message; }
+        public void setAccessToken(String accessToken) { this.accessToken = accessToken; }
+        public void setRefreshToken(String refreshToken) { this.refreshToken = refreshToken; }
+        public void setUserInfo(UserInfo userInfo) { this.userInfo = userInfo; }
     }
 
     /**
@@ -388,6 +399,10 @@ public class AuthService {
         private String department;
         private List<String> roles;
 
+        // ⭐ 기본 생성자 추가
+        public UserInfo() {
+        }
+
         public UserInfo(Long userId, String username, String fullName, String email,
                         String department, List<String> roles) {
             this.userId = userId;
@@ -405,5 +420,13 @@ public class AuthService {
         public String getEmail() { return email; }
         public String getDepartment() { return department; }
         public List<String> getRoles() { return roles; }
+
+        // ⭐ Setter 메서드들 추가
+        public void setUserId(Long userId) { this.userId = userId; }
+        public void setUsername(String username) { this.username = username; }
+        public void setFullName(String fullName) { this.fullName = fullName; }
+        public void setEmail(String email) { this.email = email; }
+        public void setDepartment(String department) { this.department = department; }
+        public void setRoles(List<String> roles) { this.roles = roles; }
     }
 }
