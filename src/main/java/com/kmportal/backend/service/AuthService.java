@@ -59,40 +59,84 @@ public class AuthService {
      */
     public LoginResponse authenticate(String username, String password) {
         try {
+            System.out.println("=================================");
+            System.out.println("🔐 로그인 인증 시작");
+            System.out.println("=================================");
+
+            // 입력값 로깅
+            System.out.println("📋 입력 데이터:");
+            System.out.println("   - Username: [" + username + "]");
+            System.out.println("   - Username 길이: " + username.length());
+            System.out.println("   - Password: [" + password + "]");  // ⚠️ 개발 환경에서만!
+            System.out.println("   - Password 길이: " + password.length());
+            System.out.println("   - Password 첫 문자 ASCII: " + (int) password.charAt(0));
+            System.out.println("   - Password 마지막 문자 ASCII: " + (int) password.charAt(password.length() - 1));
+
             // 1. 사용자 존재 여부 확인
+            System.out.println("\n📂 사용자 조회 중...");
             Optional<User> userOpt = userRepository.findByUsername(username);
             if (!userOpt.isPresent()) {
+                System.out.println("❌ 사용자 없음: " + username);
                 return LoginResponse.failure("존재하지 않는 사용자입니다.");
             }
 
             User user = userOpt.get();
+            System.out.println("✅ 사용자 조회 성공");
+            System.out.println("   - User ID: " + user.getUserId());
+            System.out.println("   - Username: " + user.getUsername());
+            System.out.println("   - Is Active: " + user.getIsActive());
+            System.out.println("   - Is Locked: " + user.getIsLocked());
+            System.out.println("   - Failed Attempts: " + user.getFailedLoginAttempts());
+            System.out.println("   - Stored Password Hash: " + user.getPassword());
 
             // 2. 계정 상태 검증
+            System.out.println("\n🔍 계정 상태 검증 중...");
             AccountStatusCheck statusCheck = checkAccountStatus(user);
             if (!statusCheck.isValid()) {
+                System.out.println("❌ 계정 상태 오류: " + statusCheck.getMessage());
                 return LoginResponse.failure(statusCheck.getMessage());
             }
+            System.out.println("✅ 계정 상태 정상");
 
             // 3. 비밀번호 검증
-            if (!passwordEncoder.matches(password, user.getPassword())) {
-                // 로그인 실패 횟수 증가
+            System.out.println("\n🔐 비밀번호 검증 중...");
+            System.out.println("   - 입력 비밀번호 (평문): [" + password + "]");
+            System.out.println("   - 저장된 해시: " + user.getPassword());
+
+            boolean matches = passwordEncoder.matches(password, user.getPassword());
+            System.out.println("   - 비밀번호 일치 여부: " + matches);
+
+            if (!matches) {
+                System.out.println("❌ 비밀번호 불일치!");
+
+                // 실패 횟수 증가
                 incrementFailedAttempts(user);
+                System.out.println("   - 실패 횟수 증가됨: " + (user.getFailedLoginAttempts() + 1));
+
                 return LoginResponse.failure("비밀번호가 일치하지 않습니다.");
             }
 
+            System.out.println("✅ 비밀번호 검증 성공!");
+
             // 4. 로그인 성공 처리
+            System.out.println("\n🎉 로그인 성공 처리 중...");
             handleSuccessfulLogin(user);
 
             // 5. JWT 토큰 생성
             String accessToken = generateAccessToken(user);
             String refreshToken = jwtUtil.generateRefreshToken(user.getUsername());
 
+            System.out.println("✅ 토큰 생성 완료");
+            System.out.println("=================================");
+            System.out.println("🎉 로그인 인증 완료!");
+            System.out.println("=================================\n");
+
             // 6. 성공 응답 생성
             return LoginResponse.success(accessToken, refreshToken, user);
 
         } catch (Exception e) {
-            // 예외 발생시 로그 기록 후 실패 응답 반환
-            System.err.println("로그인 처리 중 오류 발생: " + e.getMessage());
+            System.err.println("❌ 로그인 처리 중 오류 발생: " + e.getMessage());
+            e.printStackTrace();
             return LoginResponse.failure("시스템 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
         }
     }

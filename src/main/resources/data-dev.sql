@@ -29,7 +29,7 @@ VALUES ('ROLE_USER', '일반 사용자', '기본적인 시스템 이용 권한�
 -- 시스템 관리자 계정
 -- 비밀번호: admin123 (BCrypt로 암호화된 해시)
 INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iKXIGAcPNi4hUMwrCI2GcaGYIv1i', 'admin@kmportal.com', '시스템관리자', 'IT부', '시스템관리자', '010-1234-5678', true, false, false, 0, NOW(), NOW());
+VALUES ('admin', '$2a$12$IJEDBGWZIANqlnflc7MCZOwh1nZ0hOuRkwa.74kwELqUQCWkuLIUa', 'admin@kmportal.com', '시스템관리자', 'IT부', '시스템관리자', '010-1234-5678', true, false, false, 0, NOW(), NOW());
 
 -- 부서 관리자 계정
 -- 비밀번호: manager123 (BCrypt로 암호화된 해시)
