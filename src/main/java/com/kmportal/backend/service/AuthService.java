@@ -1,5 +1,12 @@
 package com.kmportal.backend.service;
 
+import com.kmportal.backend.controller.AuthController;
+import com.kmportal.backend.repository.RoleRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.core.env.Environment;
+import java.util.Arrays;
+
 import com.kmportal.backend.entity.User;
 import com.kmportal.backend.entity.Role;
 import com.kmportal.backend.repository.UserRepository;
@@ -46,6 +53,14 @@ public class AuthService {
 
     @Autowired
     private JwtUtil jwtUtil;
+
+    @Autowired
+    private RoleRepository roleRepository;
+
+    @Autowired
+    private Environment environment;
+
+    private static final Logger logger = LoggerFactory.getLogger(AuthService.class);
 
     /**
      * 사용자 로그인을 처리하는 메서드
@@ -273,6 +288,90 @@ public class AuthService {
         } catch (Exception e) {
             System.err.println("토큰 갱신 중 오류 발생: " + e.getMessage());
             return TokenRefreshResponse.failure("토큰 갱신에 실패했습니다.");
+        }
+    }
+
+    /**
+     * 신규 사용자 등록 처리
+     *
+     * 1. 사용자명 중복 확인
+     * 2. 이메일 중복 확인
+     * 3. 비밀번호 암호화
+     * 4. 기본 역할(ROLE_USER) 할당
+     * 5. 사용자 저장
+     *
+     * @param registerRequest 회원가입 요청 데이터
+     * @return 회원가입 처리 결과
+     */
+    public AuthController.RegisterResponse registerUser(AuthController.RegisterRequest registerRequest) {
+        try {
+            String username = registerRequest.getUsername().trim();
+            String email = registerRequest.getEmail().trim();
+            String password = registerRequest.getPassword();
+
+            logger.info("회원가입 시도 - 사용자명: {}, 이메일: {}", username, email);
+
+            // 1. 사용자명 중복 확인
+            if (userRepository.existsByUsername(username)) {
+                logger.warn("회원가입 실패 - 사용자명 중복: {}", username);
+                return AuthController.RegisterResponse.failure("이미 사용 중인 사용자명입니다.");
+            }
+
+            // 2. 이메일 중복 확인
+            if (userRepository.existsByEmail(email)) {
+                logger.warn("회원가입 실패 - 이메일 중복: {}", email);
+                return AuthController.RegisterResponse.failure("이미 사용 중인 이메일입니다.");
+            }
+
+            // 3. 비밀번호 암호화
+            String encodedPassword = passwordEncoder.encode(password);
+            logger.debug("비밀번호 암호화 완료");
+
+            // 4. 사용자 엔티티 생성
+            User newUser = new User();
+            newUser.setUsername(username);
+            newUser.setPassword(encodedPassword);
+            newUser.setEmail(email);
+            newUser.setFullName(registerRequest.getFullName());
+            newUser.setDepartment(registerRequest.getDepartment());
+            newUser.setPosition(registerRequest.getPosition());
+            newUser.setPhoneNumber(registerRequest.getPhoneNumber());
+
+            // 개발 환경에서는 바로 활성화, 운영 환경에서는 관리자 승인 필요
+            boolean isDevelopment = environment.getActiveProfiles().length > 0
+                    && Arrays.asList(environment.getActiveProfiles()).contains("dev");
+            newUser.setIsActive(isDevelopment);  // 개발: true, 운영: false
+
+            newUser.setIsLocked(false);
+            newUser.setPasswordExpired(false);
+            newUser.setFailedLoginAttempts(0);
+
+            logger.info("개발 환경 여부: {}, 계정 활성화 상태: {}", isDevelopment, isDevelopment);
+
+            // 5. 기본 역할 할당 (ROLE_USER)
+            Role userRole = roleRepository.findByRoleName("ROLE_USER")
+                    .orElseThrow(() -> {
+                        logger.error("기본 역할(ROLE_USER)을 찾을 수 없습니다.");
+                        return new RuntimeException("기본 역할(ROLE_USER)을 찾을 수 없습니다.");
+                    });
+            newUser.addRole(userRole);
+            logger.debug("기본 역할(ROLE_USER) 할당 완료");
+
+            // 6. 사용자 저장
+            User savedUser = userRepository.save(newUser);
+
+            logger.info("회원가입 성공 - 사용자ID: {}, 사용자명: {}",
+                    savedUser.getUserId(), savedUser.getUsername());
+
+            String message = isDevelopment
+                    ? "회원가입이 완료되었습니다. 바로 로그인할 수 있습니다."
+                    : "회원가입이 완료되었습니다. 관리자 승인 후 이용 가능합니다.";
+
+            return AuthController.RegisterResponse.success(message, savedUser.getUserId());
+
+        } catch (Exception e) {
+            logger.error("회원가입 처리 중 오류 발생", e);
+            return AuthController.RegisterResponse.failure("회원가입 처리 중 오류가 발생했습니다.");
         }
     }
 
