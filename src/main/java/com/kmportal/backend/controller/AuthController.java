@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 /**
  * 사용자 인증 관련 REST API를 제공하는 컨트롤러
@@ -198,6 +199,86 @@ public class AuthController {
     }
 
     /**
+     * 사용자 회원가입 API
+     *
+     * 신규 사용자 등록을 처리합니다.
+     * 사용자명과 이메일 중복을 확인하고, 비밀번호를 암호화하여 저장합니다.
+     *
+     * 요청 형식:
+     * POST /api/auth/register
+     * Content-Type: application/json
+     *
+     * 요청 본문:
+     * {
+     *   "username": "사용자명",
+     *   "password": "비밀번호",
+     *   "email": "이메일",
+     *   "fullName": "실명",
+     *   "department": "부서",
+     *   "position": "직급",
+     *   "phoneNumber": "전화번호"
+     * }
+     *
+     * 성공 응답 (201 Created):
+     * {
+     *   "success": true,
+     *   "message": "회원가입이 완료되었습니다.",
+     *   "userId": 123
+     * }
+     *
+     * 실패 응답 (400 Bad Request):
+     * {
+     *   "success": false,
+     *   "message": "이미 사용 중인 사용자명입니다."
+     * }
+     *
+     * @param registerRequest 회원가입 요청 데이터
+     * @return ResponseEntity<RegisterResponse> 회원가입 처리 결과
+     */
+    @PostMapping("/register")
+    public ResponseEntity<RegisterResponse> register(
+            @Valid @RequestBody RegisterRequest registerRequest) {
+        try {
+            // 입력값 기본 검증
+            if (registerRequest.getUsername() == null ||
+                    registerRequest.getUsername().trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(RegisterResponse.failure("사용자명을 입력해주세요."));
+            }
+
+            if (registerRequest.getPassword() == null ||
+                    registerRequest.getPassword().trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(RegisterResponse.failure("비밀번호를 입력해주세요."));
+            }
+
+            if (registerRequest.getEmail() == null ||
+                    registerRequest.getEmail().trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(RegisterResponse.failure("이메일을 입력해주세요."));
+            }
+
+            // 인증 서비스를 통해 회원가입 처리
+            RegisterResponse response = authService.registerUser(registerRequest);
+
+            // 성공시 201 Created, 실패시 400 Bad Request 반환
+            if (response.isSuccess()) {
+                return ResponseEntity.status(HttpStatus.CREATED).body(response);
+            } else {
+                return ResponseEntity.badRequest().body(response);
+            }
+
+        } catch (Exception e) {
+            System.err.println("회원가입 API 처리 중 오류 발생: " + e.getMessage());
+            e.printStackTrace();
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(RegisterResponse.failure(
+                            "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요."));
+        }
+    }
+
+    /**
      * 현재 토큰의 유효성을 검증하는 API
      *
      * 클라이언트에서 현재 보유한 토큰이 여전히 유효한지 확인할 때 사용합니다.
@@ -322,4 +403,77 @@ public class AuthController {
         public boolean isValid() { return valid; }
         public String getMessage() { return message; }
     }
+
+    /**
+     * 회원가입 요청 데이터를 담는 DTO 클래스
+     */
+    public static class RegisterRequest {
+        @NotBlank(message = "사용자명은 필수입니다.")
+        @Size(min = 3, max = 30, message = "사용자명은 3-30자 사이여야 합니다.")
+        private String username;
+
+        @NotBlank(message = "비밀번호는 필수입니다.")
+        @Size(min = 8, message = "비밀번호는 최소 8자 이상이어야 합니다.")
+        private String password;
+
+        @NotBlank(message = "이메일은 필수입니다.")
+        private String email;
+
+        @NotBlank(message = "실명은 필수입니다.")
+        private String fullName;
+
+        private String department;
+        private String position;
+        private String phoneNumber;
+
+        // 기본 생성자
+        public RegisterRequest() {}
+
+        // Getter 메서드들
+        public String getUsername() { return username; }
+        public String getPassword() { return password; }
+        public String getEmail() { return email; }
+        public String getFullName() { return fullName; }
+        public String getDepartment() { return department; }
+        public String getPosition() { return position; }
+        public String getPhoneNumber() { return phoneNumber; }
+
+        // Setter 메서드들
+        public void setUsername(String username) { this.username = username; }
+        public void setPassword(String password) { this.password = password; }
+        public void setEmail(String email) { this.email = email; }
+        public void setFullName(String fullName) { this.fullName = fullName; }
+        public void setDepartment(String department) { this.department = department; }
+        public void setPosition(String position) { this.position = position; }
+        public void setPhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
+    }
+
+    /**
+     * 회원가입 응답 데이터를 담는 DTO 클래스
+     */
+    public static class RegisterResponse {
+        private boolean success;
+        private String message;
+        private Long userId;
+
+        private RegisterResponse(boolean success, String message, Long userId) {
+            this.success = success;
+            this.message = message;
+            this.userId = userId;
+        }
+
+        public static RegisterResponse success(String message, Long userId) {
+            return new RegisterResponse(true, message, userId);
+        }
+
+        public static RegisterResponse failure(String message) {
+            return new RegisterResponse(false, message, null);
+        }
+
+        // Getter 메서드들
+        public boolean isSuccess() { return success; }
+        public String getMessage() { return message; }
+        public Long getUserId() { return userId; }
+    }
+
 }
