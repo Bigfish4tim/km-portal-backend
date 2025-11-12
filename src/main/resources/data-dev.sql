@@ -34,21 +34,21 @@ VALUES ('admin', '$2a$12$IJEDBGWZIANqlnflc7MCZOwh1nZ0hOuRkwa.74kwELqUQCWkuLIUa',
 -- 부서 관리자 계정
 -- 비밀번호: manager123 (BCrypt로 암호화된 해시)
 INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('manager', '$2a$10$8K8mQZ2kuDKZjQDiPYEeje6FuKQs8VdvHkh7q.zBTyNjQqKHHtCu.', 'manager@kmportal.com', '김부장', '영업부', '부장', '010-2345-6789', true, false, false, 0, NOW(), NOW());
+VALUES ('manager', '$2a$12$AbAg6bJdaqjAKdXmuV2F/.D3h3wRjZc0ai3MXdG4Z5OD.j2R8/wP2', 'manager@kmportal.com', '김부장', '영업부', '부장', '010-2345-6789', true, false, false, 0, NOW(), NOW());
 
 -- 게시판 관리자 계정
 -- 비밀번호: board123 (BCrypt로 암호화된 해시)
 INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('board_admin', '$2a$10$7P2L9QDxGkWwM1vN.oFTG.zLXC.8rHUGN1kOqTyI0eKQOiV8GjQdW', 'board@kmportal.com', '박과장', '기획부', '과장', '010-3456-7890', true, false, false, 0, NOW(), NOW());
+VALUES ('board_admin', '$2a$12$aM2kyiFvui3sifrUpNN/meHjMbbxSi.pntRteL8tLg3lM9FZyVcHe', 'board@kmportal.com', '박과장', '기획부', '과장', '010-3456-7890', true, false, false, 0, NOW(), NOW());
 
 -- 일반 사용자 계정들 (테스트용)
 -- 비밀번호: user123 (BCrypt로 암호화된 해시)
 INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
 VALUES
-('user01', '$2a$10$5H4Q6B7xYzQdLKfT.mNUVeQg8HtSj2nYKdOcRvPq7WnElCpS8jXYu', 'user01@kmportal.com', '이대리', '영업부', '대리', '010-4567-8901', true, false, false, 0, NOW(), NOW()),
-('user02', '$2a$10$5H4Q6B7xYzQdLKfT.mNUVeQg8HtSj2nYKdOcRvPq7WnElCpS8jXYu', 'user02@kmportal.com', '최주임', '마케팅부', '주임', '010-5678-9012', true, false, false, 0, NOW(), NOW()),
-('user03', '$2a$10$5H4Q6B7xYzQdLKfT.mNUVeQg8HtSj2nYKdOcRvPq7WnElCpS8jXYu', 'user03@kmportal.com', '정사원', 'HR부', '사원', '010-6789-0123', true, false, false, 0, NOW(), NOW()),
-('user04', '$2a$10$5H4Q6B7xYzQdLKfT.mNUVeQg8HtSj2nYKdOcRvPq7WnElCpS8jXYu', 'user04@kmportal.com', '한사원', '개발부', '사원', '010-7890-1234', true, false, false, 0, NOW(), NOW());
+('user01', '$2a$12$CscDysCO0P5T0RFkVrsP0.s4aRdr/U70OlMHonPlXxZADDIUK3ZEu', 'user01@kmportal.com', '이대리', '영업부', '대리', '010-4567-8901', true, false, false, 0, NOW(), NOW()),
+('user02', '$2a$12$CscDysCO0P5T0RFkVrsP0.s4aRdr/U70OlMHonPlXxZADDIUK3ZEu', 'user02@kmportal.com', '최주임', '마케팅부', '주임', '010-5678-9012', true, false, false, 0, NOW(), NOW()),
+('user03', '$2a$12$CscDysCO0P5T0RFkVrsP0.s4aRdr/U70OlMHonPlXxZADDIUK3ZEu', 'user03@kmportal.com', '정사원', 'HR부', '사원', '010-6789-0123', true, false, false, 0, NOW(), NOW()),
+('user04', '$2a$12$CscDysCO0P5T0RFkVrsP0.s4aRdr/U70OlMHonPlXxZADDIUK3ZEu', 'user04@kmportal.com', '한사원', '개발부', '사원', '010-7890-1234', true, false, false, 0, NOW(), NOW());
 
 -- 비활성 계정 (테스트용)
 INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
