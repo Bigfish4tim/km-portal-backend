@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 /**
@@ -20,11 +21,13 @@ import lombok.NoArgsConstructor;
  * 4. 생성일시/수정일시 자동 관리 (BaseEntity 상속)
  *
  * 작성일: 2025년 11월 12일 (18일차)
+ * 수정일: 2025년 11월 13일 (19일차) - @EqualsAndHashCode 추가
  * 작성자: 18일차 개발 담당자
  */
 @Entity
 @Table(name = "files")
 @Data
+@EqualsAndHashCode(callSuper = false)  // ✅ 추가: BaseEntity 상속 시 경고 제거
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

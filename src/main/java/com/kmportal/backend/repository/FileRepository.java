@@ -27,6 +27,7 @@ import java.util.Optional;
  * 5. 삭제되지 않은 파일만 조회 (Soft Delete)
  *
  * 작성일: 2025년 11월 12일 (18일차)
+ * 수정일: 2025년 11월 13일 (19일차) - countByIsDeletedFalse, sumFileSizeByIsDeletedFalse 추가
  * 작성자: 18일차 개발 담당자
  */
 @Repository
@@ -92,6 +93,17 @@ public interface FileRepository extends JpaRepository<File, Long> {
      * @return 해당 사용자의 파일 개수
      */
     Long countByUploadedByAndIsDeletedFalse(User uploadedBy);
+
+    /**
+     * ✅ 추가: 삭제되지 않은 전체 파일 개수 조회
+     *
+     * 통계 정보에서 사용됩니다.
+     *
+     * @return 삭제되지 않은 전체 파일 개수
+     *
+     * @since 2025-11-13 (19일차)
+     */
+    Long countByIsDeletedFalse();
 
     /**
      * 카테고리별 파일 개수 조회
@@ -189,6 +201,19 @@ public interface FileRepository extends JpaRepository<File, Long> {
      */
     @Query("SELECT SUM(f.fileSize) FROM File f WHERE f.isDeleted = false")
     Long getTotalFileSize();
+
+    /**
+     * ✅ 추가: 삭제되지 않은 파일의 총 크기 조회 (별칭 메서드)
+     *
+     * getTotalFileSize()와 동일한 기능이지만,
+     * 메서드명이 더 명확합니다.
+     *
+     * @return 삭제되지 않은 파일의 총 크기 (bytes)
+     *
+     * @since 2025-11-13 (19일차)
+     */
+    @Query("SELECT SUM(f.fileSize) FROM File f WHERE f.isDeleted = false")
+    Long sumFileSizeByIsDeletedFalse();
 
     /**
      * 특정 사용자의 파일 크기 합계 조회
