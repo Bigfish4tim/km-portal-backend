@@ -28,6 +28,7 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
 
 /**
  * 파일 관리 컨트롤러
@@ -487,6 +488,114 @@ public class FileController {
             logger.warn("⚠️ 파일을 찾을 수 없음: id={}", id);
             System.err.println("❌ 파일을 찾을 수 없음: ID=" + id);
             return ResponseEntity.notFound().build();
+        }
+    }
+
+    /**
+     * ✨ 22일차 추가: 파일 대량 삭제 API
+     * DELETE /api/files/batch
+     */
+    @DeleteMapping("/batch")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Map<String, Object>> deleteMultipleFiles(
+            @RequestBody Map<String, Object> request) {
+
+        System.out.println("🗑️ 파일 대량 삭제 API 호출");
+
+        try {
+            @SuppressWarnings("unchecked")
+            List<Object> fileIdsObj = (List<Object>) request.get("fileIds");
+
+            if (fileIdsObj == null || fileIdsObj.isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "파일 ID 목록이 비어있습니다"));
+            }
+
+            List<Long> fileIds = new java.util.ArrayList<>();
+            for (Object obj : fileIdsObj) {
+                if (obj instanceof Number) {
+                    fileIds.add(((Number) obj).longValue());
+                }
+            }
+
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String currentUsername = authentication.getName();
+
+            int deletedCount = fileService.deleteMultipleFiles(fileIds);
+
+            System.out.println("✅ 파일 대량 삭제 완료: " + deletedCount + "개");
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "파일이 성공적으로 삭제되었습니다");
+            response.put("deleted", deletedCount);
+            response.put("requested", fileIds.size());
+
+            logger.info("🗑️ 파일 대량 삭제: user={}, deleted={}", currentUsername, deletedCount);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("❌ 파일 대량 삭제 실패", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "파일 삭제 중 오류 발생: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * ✨ 22일차 추가: 파일 대량 다운로드 API (ZIP)
+     * POST /api/files/download-multiple
+     */
+    @PostMapping("/download-multiple")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Resource> downloadMultipleFiles(
+            @RequestBody Map<String, Object> request) {
+
+        System.out.println("📦 파일 대량 다운로드 API 호출");
+
+        try {
+            @SuppressWarnings("unchecked")
+            List<Object> fileIdsObj = (List<Object>) request.get("fileIds");
+
+            if (fileIdsObj == null || fileIdsObj.isEmpty()) {
+                return ResponseEntity.badRequest().build();
+            }
+
+            List<Long> fileIds = new java.util.ArrayList<>();
+            for (Object obj : fileIdsObj) {
+                if (obj instanceof Number) {
+                    fileIds.add(((Number) obj).longValue());
+                }
+            }
+
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String currentUsername = authentication.getName();
+
+            byte[] zipData = fileService.downloadMultipleFiles(fileIds);
+
+            System.out.println("✅ ZIP 파일 생성 완료: " + (zipData.length / 1024) + "KB");
+
+            org.springframework.core.io.ByteArrayResource resource =
+                    new org.springframework.core.io.ByteArrayResource(zipData);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.add(HttpHeaders.CONTENT_DISPOSITION,
+                    "attachment; filename=\"files_" + System.currentTimeMillis() + ".zip\"");
+            headers.add(HttpHeaders.CONTENT_TYPE, "application/zip");
+
+            logger.info("📦 파일 대량 다운로드: user={}, count={}", currentUsername, fileIds.size());
+
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .contentLength(zipData.length)
+                    .body(resource);
+
+        } catch (IllegalArgumentException e) {
+            logger.warn("⚠️ 파일 대량 다운로드 실패: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+
+        } catch (Exception e) {
+            logger.error("❌ 파일 대량 다운로드 실패", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 

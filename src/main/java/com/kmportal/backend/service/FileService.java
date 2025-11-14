@@ -558,4 +558,152 @@ public class FileService {
 
         return statistics;
     }
+
+    /**
+     * ✨ 22일차 추가: 여러 파일을 한 번에 삭제합니다 (대량 삭제)
+     */
+    @Transactional
+    public int deleteMultipleFiles(java.util.List<Long> fileIds) {
+        System.out.println("🗑️ 파일 대량 삭제 시작");
+        System.out.println("📋 삭제 요청 파일 개수: " + fileIds.size());
+
+        int deletedCount = 0;
+
+        for (Long fileId : fileIds) {
+            try {
+                File file = fileRepository.findById(fileId).orElse(null);
+
+                if (file == null) {
+                    logger.warn("⚠️ 파일을 찾을 수 없습니다: id={}", fileId);
+                    continue;
+                }
+
+                if (file.getIsDeleted()) {
+                    logger.warn("⚠️ 이미 삭제된 파일입니다: id={}", fileId);
+                    continue;
+                }
+
+                file.setIsDeleted(true);
+                fileRepository.save(file);
+                deletedCount++;
+
+                System.out.println("✅ 파일 삭제 성공: " + file.getOriginalName());
+
+            } catch (Exception e) {
+                logger.error("❌ 파일 삭제 실패: id={}, error={}", fileId, e.getMessage());
+            }
+        }
+
+        System.out.println("✅ 대량 삭제 완료: " + deletedCount + "개");
+        logger.info("🗑️ 파일 대량 삭제 완료: 요청={}, 삭제={}", fileIds.size(), deletedCount);
+
+        return deletedCount;
+    }
+
+    /**
+     * ✨ 22일차 추가: 여러 파일을 ZIP으로 압축하여 다운로드합니다
+     */
+    @Transactional(readOnly = true)
+    public byte[] downloadMultipleFiles(java.util.List<Long> fileIds) throws IOException {
+        System.out.println("📦 파일 대량 다운로드 (ZIP) 시작");
+        System.out.println("📋 다운로드 요청 파일 개수: " + fileIds.size());
+
+        if (fileIds.size() > 50) {
+            throw new IllegalArgumentException("❌ 최대 50개까지만 다운로드 가능합니다");
+        }
+
+        if (fileIds.isEmpty()) {
+            throw new IllegalArgumentException("❌ 다운로드할 파일이 없습니다");
+        }
+
+        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+        java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(baos);
+
+        int addedCount = 0;
+        long totalSize = 0L;
+
+        try {
+            for (Long fileId : fileIds) {
+                try {
+                    File file = fileRepository.findById(fileId).orElse(null);
+
+                    if (file == null || file.getIsDeleted()) {
+                        logger.warn("⚠️ 파일 건너뜀: id={}", fileId);
+                        continue;
+                    }
+
+                    Path filePath = Paths.get(file.getFilePath());
+
+                    if (!Files.exists(filePath)) {
+                        logger.warn("⚠️ 실제 파일 없음: {}", filePath);
+                        continue;
+                    }
+
+                    long fileSize = Files.size(filePath);
+                    if (totalSize + fileSize > 100 * 1024 * 1024) {
+                        logger.warn("⚠️ ZIP 크기 제한 초과");
+                        break;
+                    }
+
+                    String zipEntryName = file.getOriginalName();
+                    int count = 1;
+                    String baseFileName = zipEntryName;
+
+                    while (true) {
+                        try {
+                            java.util.zip.ZipEntry entry = new java.util.zip.ZipEntry(zipEntryName);
+                            zos.putNextEntry(entry);
+                            break;
+                        } catch (java.util.zip.ZipException e) {
+                            int dotIndex = baseFileName.lastIndexOf('.');
+                            if (dotIndex > 0) {
+                                String name = baseFileName.substring(0, dotIndex);
+                                String ext = baseFileName.substring(dotIndex);
+                                zipEntryName = name + "_" + count + ext;
+                            } else {
+                                zipEntryName = baseFileName + "_" + count;
+                            }
+                            count++;
+                        }
+                    }
+
+                    Files.copy(filePath, zos);
+                    zos.closeEntry();
+
+                    file.setDownloadCount(file.getDownloadCount() + 1);
+                    fileRepository.save(file);
+
+                    addedCount++;
+                    totalSize += fileSize;
+
+                    System.out.println("✅ ZIP에 추가: " + file.getOriginalName());
+
+                } catch (Exception e) {
+                    logger.error("❌ 파일 추가 실패: id={}", fileId, e);
+                }
+            }
+
+            zos.finish();
+            zos.close();
+
+            System.out.println("✅ ZIP 생성 완료: " + addedCount + "개");
+            logger.info("📦 ZIP 생성 완료: 요청={}, 포함={}", fileIds.size(), addedCount);
+
+            if (addedCount == 0) {
+                throw new IllegalArgumentException("❌ 다운로드 가능한 파일이 없습니다");
+            }
+
+            return baos.toByteArray();
+
+        } catch (IOException e) {
+            logger.error("❌ ZIP 생성 실패", e);
+            throw new IOException("ZIP 생성 중 오류 발생: " + e.getMessage());
+        } finally {
+            try {
+                zos.close();
+            } catch (IOException e) {
+                logger.error("❌ ZipOutputStream 닫기 실패", e);
+            }
+        }
+    }
 }
