@@ -11,6 +11,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -24,6 +25,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.net.MalformedURLException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -35,6 +37,7 @@ import java.util.Map;
  * API 엔드포인트:
  * - POST   /api/files              : 파일 업로드
  * - GET    /api/files              : 파일 목록 조회 (페이징)
+ * - GET    /api/files/search       : 파일 검색 (21일차 추가) ✨
  * - GET    /api/files/my           : 내가 업로드한 파일 목록
  * - GET    /api/files/statistics   : 파일 통계 정보
  * - GET    /api/files/{id}         : 파일 상세 조회
@@ -42,8 +45,9 @@ import java.util.Map;
  * - DELETE /api/files/{id}         : 파일 삭제
  *
  * @author KM Portal Team
- * @version 1.0
+ * @version 1.1
  * @since 2025-11-13 (19일차)
+ * 수정일: 2025-11-14 (21일차) - 파일 검색 API 추가
  */
 @RestController
 @RequestMapping("/api/files")
@@ -171,6 +175,88 @@ public class FileController {
     }
 
     /**
+     * ✨ 21일차 추가: 파일 검색 API
+     *
+     * HTTP Method: GET
+     * URL: /api/files/search
+     *
+     * 쿼리 파라미터:
+     * - keyword: 검색 키워드 (파일명, 설명에서 검색)
+     * - category: 파일 카테고리 (DOCUMENT, IMAGE 등)
+     * - userId: 특정 사용자가 업로드한 파일만 검색
+     * - startDate: 검색 시작 날짜 (YYYY-MM-DDTHH:mm:ss 형식)
+     * - endDate: 검색 종료 날짜 (YYYY-MM-DDTHH:mm:ss 형식)
+     * - page: 페이지 번호 (0부터 시작, 기본값: 0)
+     * - size: 페이지당 항목 수 (기본값: 10)
+     * - sort: 정렬 기준 (기본값: createdAt,desc)
+     *
+     * 예시:
+     * GET /api/files/search?keyword=회의록&category=DOCUMENT&page=0&size=10
+     * GET /api/files/search?startDate=2025-11-01T00:00:00&endDate=2025-11-14T23:59:59
+     * GET /api/files/search?userId=1&keyword=보고서
+     *
+     * 응답:
+     * - 200 OK: Page<File> - 검색된 파일 목록
+     * - 401 Unauthorized: 인증되지 않은 사용자
+     *
+     * @param keyword String - 검색 키워드 (선택)
+     * @param category String - 파일 카테고리 (선택)
+     * @param userId Long - 사용자 ID (선택)
+     * @param startDate LocalDateTime - 검색 시작 날짜 (선택)
+     * @param endDate LocalDateTime - 검색 종료 날짜 (선택)
+     * @param pageable Pageable - 페이징 정보
+     * @return ResponseEntity<Page<File>> - 검색된 파일 목록
+     *
+     * @since 2025-11-14 (21일차)
+     */
+    @GetMapping("/search")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Page<File>> searchFiles(
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "category", required = false) String category,
+            @RequestParam(value = "userId", required = false) Long userId,
+            @RequestParam(value = "startDate", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @RequestParam(value = "endDate", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
+            @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC)
+            Pageable pageable) {
+
+        System.out.println("=================================");
+        System.out.println("🔍 파일 검색 API 호출");
+        System.out.println("=================================");
+        System.out.println("📋 검색 조건:");
+        System.out.println("   - 키워드: " + (keyword != null ? keyword : "없음"));
+        System.out.println("   - 카테고리: " + (category != null ? category : "없음"));
+        System.out.println("   - 사용자 ID: " + (userId != null ? userId : "없음"));
+        System.out.println("   - 시작 날짜: " + (startDate != null ? startDate : "없음"));
+        System.out.println("   - 종료 날짜: " + (endDate != null ? endDate : "없음"));
+        System.out.println("   - 페이지: " + pageable.getPageNumber());
+        System.out.println("   - 크기: " + pageable.getPageSize());
+
+        logger.info("🔍 파일 검색 API: keyword={}, category={}, userId={}, startDate={}, endDate={}",
+                keyword, category, userId, startDate, endDate);
+
+        // 서비스 메서드 호출
+        Page<File> files = fileService.searchFiles(
+                keyword,
+                category,
+                userId,
+                startDate,
+                endDate,
+                pageable
+        );
+
+        System.out.println("✅ 파일 검색 API 완료");
+        System.out.println("   - 검색 결과: " + files.getTotalElements() + "건");
+        System.out.println("=================================\n");
+
+        logger.info("✅ 파일 검색 완료: 총 {}건", files.getTotalElements());
+
+        return ResponseEntity.ok(files);
+    }
+
+    /**
      * 현재 로그인한 사용자가 업로드한 파일 목록 조회
      *
      * HTTP Method: GET
@@ -230,9 +316,6 @@ public class FileController {
      *
      * 경로 변수:
      * - id: 파일 ID
-     *
-     * 예시:
-     * GET /api/files/123
      *
      * 응답:
      * - 200 OK: File - 파일 상세 정보

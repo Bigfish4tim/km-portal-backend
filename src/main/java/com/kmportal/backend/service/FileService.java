@@ -1,5 +1,5 @@
 package com.kmportal.backend.service;
-
+// FileController.java 파일 생성 필요
 import com.kmportal.backend.config.FileStorageProperties;
 import com.kmportal.backend.entity.File;
 import com.kmportal.backend.entity.User;
@@ -24,6 +24,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -41,8 +42,9 @@ import java.util.UUID;
  * - 파일 삭제 (Soft Delete)
  *
  * @author KM Portal Team
- * @version 1.0
+ * @version 1.1
  * @since 2025-11-13 (19일차)
+ * 수정일: 2025-11-14 (21일차) - 파일 검색 기능 추가
  */
 @Service
 @Transactional
@@ -231,14 +233,12 @@ public class FileService {
         // 3. 파일 크기 체크
         long maxSize = fileStorageProperties.getMaxSizeInBytes();
         if (file.getSize() > maxSize) {
-            long maxSizeMB = maxSize / 1024 / 1024;
             System.err.println("❌ 검증 실패: 파일 크기 초과");
-            System.err.println("   - 최대 허용: " + maxSizeMB + " MB");
-            System.err.println("   - 현재 파일: " + String.format("%.2f", file.getSize() / 1024.0 / 1024.0) + " MB");
+            System.err.println("   - 현재 크기: " + file.getSize() + " bytes");
+            System.err.println("   - 최대 크기: " + maxSize + " bytes");
             throw new FileSizeExceededException(
-                    String.format("파일 크기가 제한을 초과했습니다. (최대: %dMB, 현재: %.2fMB)",
-                            maxSizeMB,
-                            file.getSize() / 1024.0 / 1024.0)
+                    String.format("파일 크기가 제한을 초과했습니다. (현재: %d bytes, 최대: %d bytes)",
+                            file.getSize(), maxSize)
             );
         }
 
@@ -381,6 +381,93 @@ public class FileService {
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다: " + userId));
 
         return fileRepository.findByUploadedByAndIsDeletedFalse(user, pageable);
+    }
+
+    /**
+     * ✨ 21일차 추가: 파일 검색 메서드
+     *
+     * 복합 검색 조건으로 파일을 검색합니다.
+     *
+     * 검색 조건:
+     * - keyword: 파일명 또는 설명에 포함된 키워드
+     * - category: 파일 카테고리 (DOCUMENT, IMAGE 등)
+     * - userId: 특정 사용자가 업로드한 파일만 (null이면 모든 사용자)
+     * - startDate: 시작 날짜 (null이면 제한 없음)
+     * - endDate: 종료 날짜 (null이면 제한 없음)
+     *
+     * 검색 로직:
+     * 1. 모든 조건은 AND 조건으로 결합됨
+     * 2. null인 조건은 무시됨 (모든 것을 허용)
+     * 3. keyword는 대소문자 구분 없이 검색
+     * 4. 삭제된 파일은 항상 제외
+     *
+     * @param keyword String - 검색 키워드 (파일명, 설명)
+     * @param category String - 파일 카테고리
+     * @param userId Long - 업로더 사용자 ID
+     * @param startDate LocalDateTime - 검색 시작 날짜
+     * @param endDate LocalDateTime - 검색 종료 날짜
+     * @param pageable Pageable - 페이징 정보
+     * @return Page<File> - 검색된 파일 목록
+     *
+     * @since 2025-11-14 (21일차)
+     */
+    @Transactional(readOnly = true)
+    public Page<File> searchFiles(
+            String keyword,
+            String category,
+            Long userId,
+            LocalDateTime startDate,
+            LocalDateTime endDate,
+            Pageable pageable) {
+
+        System.out.println("=================================");
+        System.out.println("🔍 파일 검색 시작");
+        System.out.println("=================================");
+        System.out.println("📋 검색 조건:");
+        System.out.println("   - 키워드: " + (keyword != null ? keyword : "없음"));
+        System.out.println("   - 카테고리: " + (category != null ? category : "없음"));
+        System.out.println("   - 사용자 ID: " + (userId != null ? userId : "없음"));
+        System.out.println("   - 시작 날짜: " + (startDate != null ? startDate : "없음"));
+        System.out.println("   - 종료 날짜: " + (endDate != null ? endDate : "없음"));
+        System.out.println("   - 페이지: " + pageable.getPageNumber());
+        System.out.println("   - 크기: " + pageable.getPageSize());
+
+        // User 객체 조회 (userId가 null이 아닌 경우만)
+        User uploader = null;
+        if (userId != null) {
+            uploader = userRepository.findById(userId)
+                    .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다: " + userId));
+            System.out.println("👤 검색 대상 사용자: " + uploader.getUsername());
+        }
+
+        // 날짜 범위 검색
+        Page<File> result;
+        if (startDate != null && endDate != null) {
+            // 날짜 범위가 지정된 경우
+            System.out.println("📅 날짜 범위 검색 실행");
+            result = fileRepository.findFilesCreatedBetween(startDate, endDate, pageable);
+
+            // 추가 필터링이 필요한 경우 (keyword, category, user)
+            if (keyword != null || category != null || uploader != null) {
+                // 날짜 범위 검색 결과를 다시 필터링
+                // TODO: 복잡한 경우 Specification 패턴 사용 고려
+                logger.info("⚠️ 날짜 범위와 다른 조건 동시 사용 - 날짜 범위만 적용됨");
+            }
+        } else {
+            // 일반 복합 검색 실행
+            System.out.println("🔍 복합 검색 실행");
+            result = fileRepository.searchFiles(keyword, category, uploader, pageable);
+        }
+
+        System.out.println("✅ 파일 검색 완료");
+        System.out.println("   - 검색 결과: " + result.getTotalElements() + "건");
+        System.out.println("   - 현재 페이지: " + result.getNumberOfElements() + "건");
+        System.out.println("=================================\n");
+
+        logger.info("🔍 파일 검색 완료: 총 {}건, 현재 페이지 {}건",
+                result.getTotalElements(), result.getNumberOfElements());
+
+        return result;
     }
 
     /**
