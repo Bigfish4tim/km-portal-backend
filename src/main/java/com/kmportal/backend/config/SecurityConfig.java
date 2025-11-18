@@ -145,6 +145,13 @@ public class SecurityConfig {
                         // 게시판 관리 API
                         .requestMatchers("/api/boards/*/admin/**").hasAnyRole("ADMIN", "BOARD_ADMIN")
 
+                        // 게시글 상단 고정/해제 (관리자만)
+                        .requestMatchers("/api/boards/*/pin").hasRole("ADMIN")
+
+                        // 게시판 통계 (관리자 또는 매니저)
+                        .requestMatchers("/api/boards/statistics").hasAnyRole("ADMIN", "MANAGER")
+
+
                         // ===== 인증된 사용자 접근 가능 엔드포인트 =====
 
                         // 기본 사용자 정보 조회/수정
