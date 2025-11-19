@@ -18,6 +18,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+// 🆕 26일차: JSoup import 추가
+import org.jsoup.Jsoup;
+import org.jsoup.safety.Safelist;
+
 /**
  * BoardService
  *
@@ -115,15 +119,20 @@ public class BoardService {
         User currentUser = getCurrentUser();
         log.info("현재 사용자: {} (ID: {})", currentUser.getUsername(), currentUser.getUserId());
 
+        // 🆕 26일차: HTML 새니타이징 (XSS 방지)
+        String sanitizedContent = sanitizeHtml(content);
+        log.info("HTML 새니타이징 적용됨 - 원본 길이: {} → 새니타이징 후 길이: {}",
+                content.length(), sanitizedContent.length());
+
         // 3. Board 엔티티 생성 (Builder 패턴 사용)
         Board board = Board.builder()
-                .title(title.trim())      // 앞뒤 공백 제거
-                .content(content.trim())  // 앞뒤 공백 제거
+                .title(title.trim())          // 앞뒤 공백 제거
+                .content(sanitizedContent)    // 🆕 26일차: 새니타이징된 내용 사용
                 .category(category)
                 .author(currentUser)
-                .viewCount(0)             // 초기 조회수 0
-                .isPinned(false)          // 기본값: 상단 고정 안 함
-                .isDeleted(false)         // 기본값: 삭제 안 됨
+                .viewCount(0)                 // 초기 조회수 0
+                .isPinned(false)              // 기본값: 상단 고정 안 함
+                .isDeleted(false)             // 기본값: 삭제 안 됨
                 .build();
 
         // 4. 데이터베이스에 저장
@@ -356,8 +365,13 @@ public class BoardService {
             throw new RuntimeException("게시글을 수정할 권한이 없습니다.");
         }
 
+        // 🆕 26일차: HTML 새니타이징 (XSS 방지)
+        String sanitizedContent = sanitizeHtml(content);
+        log.info("HTML 새니타이징 적용됨 - 원본 길이: {} → 새니타이징 후 길이: {}",
+                content.length(), sanitizedContent.length());
+
         // 3. 게시글 정보 업데이트
-        board.update(title, content, category);
+        board.update(title, sanitizedContent, category);  // 🆕 26일차: 새니타이징된 내용 전달
         Board updatedBoard = boardRepository.save(board);
 
         log.info("게시글 수정 완료 - ID: {}, 제목: {}", id, updatedBoard.getTitle());
@@ -593,6 +607,51 @@ public class BoardService {
                         role.getRoleName().equals("ROLE_ADMIN") ||
                                 role.getRoleName().equals("ROLE_BOARD_ADMIN")
                 );
+    }
+
+    /**
+     * HTML 콘텐츠 새니타이징 (XSS 방지)
+     *
+     * JSoup 라이브러리를 사용하여 위험한 HTML 태그와 속성을 제거합니다.
+     * 안전한 HTML 태그만 허용하여 XSS 공격을 방지합니다.
+     *
+     * @param html 원본 HTML 문자열
+     * @return 새니타이징된 안전한 HTML 문자열
+     *
+     * 허용되는 태그 (Safelist.relaxed()):
+     * - 텍스트: <p>, <span>, <div>, <br>
+     * - 헤딩: <h1>, <h2>, <h3>, <h4>, <h5>, <h6>
+     * - 강조: <strong>, <b>, <em>, <i>, <u>
+     * - 목록: <ul>, <ol>, <li>
+     * - 링크: <a> (href 속성 허용)
+     * - 이미지: <img> (src, alt 속성 허용)
+     * - 표: <table>, <thead>, <tbody>, <tr>, <th>, <td>
+     * - 인용: <blockquote>
+     * - 코드: <code>, <pre>
+     *
+     * 제거되는 태그 (XSS 위험):
+     * - <script>: 자바스크립트 실행
+     * - <iframe>: 외부 페이지 삽입
+     * - <object>, <embed>: 플러그인 실행
+     * - <form>: 폼 제출
+     * - <input>, <button>: 사용자 입력
+     *
+     * 26일차 추가: XSS 방지
+     */
+    private String sanitizeHtml(String html) {
+        if (html == null || html.trim().isEmpty()) {
+            return html;
+        }
+
+        // JSoup Safelist.relaxed() 사용
+        // - 기본적인 텍스트 서식, 링크, 이미지, 표 등 허용
+        // - 스크립트, 폼, 위험한 속성 등은 제거
+        String sanitized = Jsoup.clean(html, Safelist.relaxed());
+
+        log.debug("HTML 새니타이징 완료 - 원본 길이: {} → 새니타이징 후 길이: {}",
+                html.length(), sanitized.length());
+
+        return sanitized;
     }
 }
 
