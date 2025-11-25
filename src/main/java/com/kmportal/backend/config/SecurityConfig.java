@@ -26,11 +26,13 @@ import org.springframework.web.cors.CorsConfigurationSource;
  * - 비밀번호 암호화 설정
  * - 메서드 레벨 보안 활성화
  *
- * JWT를 사용하므로 전통적인 세션 기반 인증은 비활성화하고,
+ * JWTを 사용하므로 전통적인 세션 기반 인증은 비활성화하고,
  * 모든 요청은 토큰을 통해 인증됩니다.
  *
+ * 🆕 30일차 수정: 댓글 API 권한 설정 추가
+ *
  * @author KM Portal Team
- * @version 1.0
+ * @version 1.1
  * @since 2025-09-24
  */
 @Configuration
@@ -151,7 +153,6 @@ public class SecurityConfig {
                         // 게시판 통계 (관리자 또는 매니저)
                         .requestMatchers("/api/boards/statistics").hasAnyRole("ADMIN", "MANAGER")
 
-
                         // ===== 인증된 사용자 접근 가능 엔드포인트 =====
 
                         // 기본 사용자 정보 조회/수정
@@ -167,7 +168,19 @@ public class SecurityConfig {
                         .requestMatchers("/api/files/download/*").authenticated()
                         .requestMatchers("/api/files/delete/*").authenticated()
 
-                        // 게시판 API
+                        // ===== 🆕 30일차 추가: 댓글 API 권한 설정 =====
+                        // 댓글 작성/수정/삭제 - 로그인 필요
+                        // 댓글 API는 /api/boards/{boardId}/comments/** 형태
+                        // /api/boards/** 패턴에 포함되지만 명시적으로 설정
+
+                        // 댓글 목록 조회 - 인증된 사용자
+                        .requestMatchers("/api/boards/*/comments").authenticated()
+
+                        // 댓글 작성 - 인증된 사용자
+                        .requestMatchers("/api/boards/*/comments/**").authenticated()
+
+                        // ===== 기존 게시판 API =====
+                        // 게시판 API (댓글 API 포함)
                         .requestMatchers("/api/boards/**").authenticated()
                         .requestMatchers("/api/posts/**").authenticated()
                         .requestMatchers("/api/comments/**").authenticated()
@@ -191,7 +204,7 @@ public class SecurityConfig {
                 // ===== HTTP 보안 헤더 설정 =====
                 .headers(headers -> headers
                         // X-Frame-Options: H2 콘솔을 위해 sameOrigin으로 설정
-                        .frameOptions(frame -> frame.sameOrigin()) // 수정: H2 콘솔 iframe 허용
+                        .frameOptions(frame -> frame.sameOrigin())
 
                         // X-Content-Type-Options: MIME 타입 스니핑 방지
                         .contentTypeOptions(contentType -> {})
@@ -205,7 +218,21 @@ public class SecurityConfig {
 
         return http.build();
     }
-
-    // H2 콘솔용 별도 필터 체인 제거 (충돌 방지)
-    // 메인 필터 체인에서 /h2-console/** 경로를 permitAll()로 처리함
 }
+
+/*
+ * ====== 30일차 수정 내용 ======
+ *
+ * 댓글 API 경로:
+ * - POST   /api/boards/{boardId}/comments              - 댓글 작성
+ * - POST   /api/boards/{boardId}/comments/{id}/replies - 대댓글 작성
+ * - GET    /api/boards/{boardId}/comments              - 댓글 목록 조회
+ * - GET    /api/boards/{boardId}/comments/{id}/replies - 대댓글 목록 조회
+ * - PUT    /api/boards/{boardId}/comments/{id}         - 댓글 수정
+ * - DELETE /api/boards/{boardId}/comments/{id}         - 댓글 삭제
+ * - GET    /api/boards/{boardId}/comments/count        - 댓글 수 조회
+ *
+ * 권한 정책:
+ * - 모든 댓글 API는 로그인한 사용자만 접근 가능
+ * - 댓글 수정/삭제는 본인 또는 관리자만 가능 (Service 레이어에서 체크)
+ */
