@@ -344,6 +344,20 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
      * @return 대댓글 존재 여부
      */
     boolean existsByParent_IdAndIsDeletedFalse(Long parentId);
+
+    // ================================
+    // ✅ 추가: 통계 API용 메서드 (32일차)
+    // ================================
+
+    /**
+     * ✅ 추가: 특정 시점 이후 작성된 댓글 수 조회
+     */
+    long countByCreatedAtAfter(LocalDateTime createdAt);
+
+    /**
+     * ✅ 추가: 최근 댓글 5개 조회 (삭제되지 않은 것만, 작성일 기준)
+     */
+    List<Comment> findTop5ByIsDeletedFalseOrderByCreatedAtDesc();
 }
 
 /*

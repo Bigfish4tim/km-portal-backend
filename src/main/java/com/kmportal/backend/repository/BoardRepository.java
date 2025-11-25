@@ -13,6 +13,7 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Map;
 
 /**
  * BoardRepository
@@ -458,6 +459,59 @@ public interface BoardRepository extends JpaRepository<Board, Long> {
      */
     @Query("SELECT b FROM Board b WHERE b.isDeleted = true AND b.deletedAt < :deletedBefore")
     List<Board> findDeletedBoardsOlderThan(@Param("deletedBefore") LocalDateTime deletedBefore);
+
+    // ================================
+    // ✅ 추가: 통계 API용 메서드 (32일차)
+    // ================================
+
+    /**
+     * ✅ 추가: 특정 시점 이후 작성된 게시글 수 조회
+     */
+    long countByCreatedAtAfter(LocalDateTime createdAt);
+
+    /**
+     * ✅ 추가: 특정 기간 내 작성된 게시글 수 조회
+     */
+    long countByCreatedAtBetween(LocalDateTime startDate, LocalDateTime endDate);
+
+    /**
+     * ✅ 추가: 평균 조회수 조회
+     */
+    @Query("SELECT AVG(b.viewCount) FROM Board b WHERE b.isDeleted = false")
+    Double findAverageViewCount();
+
+    /**
+     * ✅ 추가: 인기 게시글 TOP 5 조회 (조회수 기준)
+     */
+    List<Board> findTop5ByIsDeletedFalseOrderByViewCountDesc();
+
+    /**
+     * ✅ 추가: 최근 게시글 5개 조회 (작성일 기준)
+     */
+    List<Board> findTop5ByIsDeletedFalseOrderByCreatedAtDesc();
+
+    /**
+     * ✅ 추가: 부서별 게시글 수 조회 (Raw)
+     */
+    @Query("SELECT b.author.department, COUNT(b) FROM Board b " +
+            "WHERE b.isDeleted = false AND b.author IS NOT NULL AND b.author.department IS NOT NULL " +
+            "GROUP BY b.author.department " +
+            "ORDER BY COUNT(b) DESC")
+    List<Object[]> findBoardCountByDepartmentRaw();
+
+    /**
+     * ✅ 추가: 부서별 게시글 수 조회 (Map 반환)
+     */
+    default Map<String, Long> findBoardCountByDepartment() {
+        List<Object[]> results = findBoardCountByDepartmentRaw();
+        Map<String, Long> map = new java.util.HashMap<>();
+        for (Object[] row : results) {
+            String department = (String) row[0];
+            Long count = (Long) row[1];
+            map.put(department, count);
+        }
+        return map;
+    }
 }
 
 /*

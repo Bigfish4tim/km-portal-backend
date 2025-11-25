@@ -399,4 +399,41 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * @return 해당 부서의 활성 사용자 수
      */
     long countByDepartmentAndIsActiveTrue(String department);
+
+    // ================================
+    // ✅ 추가: 통계 API용 카운트 메서드 (32일차)
+    // ================================
+
+    /**
+     * ✅ 추가: 특정 시점 이후 생성된 사용자 수 조회
+     *
+     * 오늘 가입한 사용자 수를 조회하는 등 통계에 사용됩니다.
+     *
+     * @param createdAt 기준 시간
+     * @return 해당 시간 이후 생성된 사용자 수
+     *
+     * 사용 예시:
+     * LocalDateTime today = LocalDate.now().atStartOfDay();
+     * long todayNewUsers = userRepository.countByCreatedAtAfter(today);
+     *
+     * @since 2025-11-25 (32일차)
+     */
+    long countByCreatedAtAfter(LocalDateTime createdAt);
+
+    /**
+     * ✅ 추가: 특정 시점 이후 마지막 로그인한 사용자 수 조회
+     *
+     * 활성 사용자 수를 조회하는 등 통계에 사용됩니다.
+     * 예: 최근 30일 내 로그인한 사용자 수
+     *
+     * @param lastLoginAt 기준 시간
+     * @return 해당 시간 이후 로그인한 사용자 수
+     *
+     * 사용 예시:
+     * LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
+     * long activeUsers = userRepository.countByLastLoginAtAfter(thirtyDaysAgo);
+     *
+     * @since 2025-11-25 (32일차)
+     */
+    long countByLastLoginAtAfter(LocalDateTime lastLoginAt);
 }

@@ -338,6 +338,31 @@ public class Board extends BaseEntity {
             this.category = category;
         }
     }
+
+    // ====== 통계 API용 편의 메서드 ======
+
+    /**
+     * 작성자 이름 조회 편의 메서드
+     *
+     * @return 작성자 이름 (작성자가 없으면 "알 수 없음")
+     */
+    public String getAuthorName() {
+        if (this.author != null && this.author.getFullName() != null) {
+            return this.author.getFullName();
+        }
+        return "알 수 없음";
+    }
+
+    /**
+     * 댓글 수 조회 편의 메서드
+     *
+     * @return 댓글 수 (현재는 0 반환, 향후 실제 댓글 수로 개선 가능)
+     */
+    public Integer getCommentCount() {
+        // 현재는 기본값 0 반환
+        // 향후 Comment 엔티티와 연관관계가 맺어지면 실제 댓글 수 반환
+        return 0;
+    }
 }
 
 /*
