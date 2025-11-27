@@ -1,6 +1,11 @@
+# ============================================
 # KM 포털 백엔드 애플리케이션 설정
 # Spring Boot 3.5.5 + JWT 인증 시스템 설정
-# 18일차 파일 시스템 설정 추가 (2025-11-12)
+#
+# 버전 이력:
+# - 18일차: 파일 시스템 설정 추가 (2025-11-12)
+# - 36일차: API 성능 분석 도구 설정 강화 (2025-11-27)
+# ============================================
 
 # ===== 서버 설정 =====
 server:
@@ -14,6 +19,13 @@ server:
   error:
     include-message: always
     include-binding-errors: always
+
+  # ===== 36일차 추가: 응답 압축 설정 (성능 최적화) =====
+  # API 응답 크기를 줄여 네트워크 대역폭을 절약합니다.
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain,application/javascript,text/css
+    min-response-size: 1024  # 1KB 이상인 응답만 압축
 
 # ===== Spring 기본 설정 =====
 spring:
@@ -54,6 +66,10 @@ spring:
           batch_size: 20    # 배치 처리 크기
         order_inserts: true # INSERT 순서 최적화
         order_updates: true # UPDATE 순서 최적화
+        # ===== 36일차 추가: 성능 통계 수집 =====
+        # Hibernate 쿼리 성능 분석을 위한 통계 수집 활성화
+        # Actuator /actuator/metrics에서 hibernate.* 메트릭 확인 가능
+        generate_statistics: true
     defer-datasource-initialization: true  # 데이터 초기화 지연
 
   # SQL 초기화 설정
@@ -132,6 +148,8 @@ logging:
     org.h2: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE  # SQL 파라미터 로그
     io.jsonwebtoken: DEBUG                # JWT 라이브러리 로그
+    # ===== 36일차 추가: Actuator 로깅 =====
+    org.springframework.boot.actuate: INFO
 
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
@@ -236,7 +254,7 @@ file:
     max-size: 50MB          # 개별 파일 최대 크기
     max-total-size: 500MB   # 사용자당 전체 파일 크기 제한
 
-    # ===== 파일 저장 옵션 (19-20일차 구현 예정) =====
+    # ===== 파일 저장 옵션 (19-20일차 구현) =====
     # 디렉토리 자동 생성 여부
     auto-create-directory: true
 
@@ -283,33 +301,207 @@ app:
     default-ttl: 3600              # 기본 TTL (초)
     max-entries: 10000             # 최대 엔트리 수
 
-# ===== Actuator 설정 (모니터링) =====
+# ============================================
+# Actuator 설정 (모니터링)
+# 36일차 업데이트: API 성능 분석 도구 설정 강화
+# ============================================
 management:
+  # ===== 엔드포인트 노출 설정 =====
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,env,beans  # 노출할 엔드포인트
+        # 노출할 엔드포인트 목록
+        # - health: 애플리케이션 상태
+        # - info: 애플리케이션 정보
+        # - metrics: 메트릭 정보
+        # - env: 환경 변수 (보안 주의)
+        # - beans: Spring Bean 목록
+        # - loggers: 로깅 레벨 조회/변경
+        # - mappings: URL 매핑 정보
+        # - caches: 캐시 정보
+        include: health,info,metrics,env,beans,loggers,mappings,caches
       base-path: /actuator
+      # CORS 설정 (프론트엔드에서 Actuator 접근 허용)
+      cors:
+        allowed-origins: http://localhost:3000
+        allowed-methods: GET,POST
+    # JMX 엔드포인트 비활성화 (웹만 사용)
+    jmx:
+      exposure:
+        exclude: "*"
+
+  # ===== 개별 엔드포인트 설정 =====
   endpoint:
+    # Health 엔드포인트 상세 설정
     health:
-      show-details: when-authorized  # 인증된 사용자에게만 상세 정보 표시
-      show-components: always
-  info:
-    env:
+      show-details: when-authorized  # 인증된 사용자에게만 상세 정보
+      show-components: always        # 컴포넌트 상태 항상 표시
+      probes:
+        enabled: true                # Kubernetes 프로브 지원
+      group:
+        # 라이브니스 프로브 그룹 (애플리케이션 생존 여부)
+        liveness:
+          include: livenessState
+          show-details: always
+        # 레디니스 프로브 그룹 (요청 처리 가능 여부)
+        readiness:
+          include: readinessState,db
+          show-details: always
+
+    # Info 엔드포인트
+    info:
       enabled: true
 
-# ===== 18일차 작업 완료 =====
-# 작성일: 2025년 11월 12일
-# 작성자: 18일차 개발 담당자
+    # Metrics 엔드포인트
+    metrics:
+      enabled: true
+
+    # Loggers 엔드포인트 (런타임 로그 레벨 변경 가능)
+    loggers:
+      enabled: true
+
+    # Mappings 엔드포인트 (URL 매핑 정보)
+    mappings:
+      enabled: true
+
+    # Caches 엔드포인트 (캐시 정보)
+    caches:
+      enabled: true
+
+  # ===== Health 상태 표시기 설정 =====
+  health:
+    # 데이터베이스 상태 체크
+    db:
+      enabled: true
+    # 디스크 공간 상태 체크
+    diskspace:
+      enabled: true
+      threshold: 100MB  # 최소 여유 공간 (이하 시 경고)
+    # 라이브니스/레디니스 상태
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+  # ===== 메트릭 설정 =====
+  metrics:
+    # 태그 설정 (메트릭 그룹화용)
+    tags:
+      application: ${spring.application.name}
+      environment: development
+    # 웹 요청 메트릭
+    web:
+      server:
+        request:
+          autotime:
+            enabled: true           # 자동 시간 측정
+            percentiles: 0.5,0.95,0.99  # 백분위수 (50%, 95%, 99%)
+    # 분포 통계
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true  # HTTP 요청 히스토그램
+      slo:
+        # SLO(Service Level Objective) 경계값
+        # 응답 시간이 이 값들을 기준으로 분류됨
+        http.server.requests: 100ms,500ms,1s,5s
+
+  # ===== 애플리케이션 정보 노출 설정 =====
+  info:
+    env:
+      enabled: true    # 환경 변수 정보
+    java:
+      enabled: true    # Java 버전 정보
+    os:
+      enabled: true    # OS 정보
+    build:
+      enabled: true    # 빌드 정보
+    git:
+      enabled: true    # Git 정보
+      mode: full       # 상세 Git 정보 (커밋, 브랜치 등)
+
+# ===== Info 엔드포인트에 표시될 정보 =====
+# GET /actuator/info 호출 시 반환되는 정보
+info:
+  app:
+    name: ${app.name}
+    version: ${app.version}
+    description: ${app.description}
+    encoding: UTF-8
+    java:
+      version: ${java.version}
+  build:
+    date: "2025-11-27"
+    day: 36
+    phase: "4단계 - 완성 및 최적화"
+  contact:
+    email: admin@kmportal.com
+    team: "KM Portal Development Team"
+  features:
+    authentication: JWT
+    database: H2/MSSQL
+    frontend: Vue 3 + Element Plus
+    responsive: true
+
+# ============================================
+# 설정 파일 변경 이력
+# ============================================
 #
-# 변경사항:
-# 1. spring.servlet.multipart 설정 확인 및 주석 추가
-# 2. file.storage.path 설정 설명 추가
-# 3. 파일 저장 디렉토리 구조 설명 추가
-# 4. 허용 파일 확장자에 webp, 7z 추가
-# 5. 19-20일차 구현 예정 옵션 추가
+# [18일차 작업 완료] 2025-11-12
+# - spring.servlet.multipart 설정 확인 및 주석 추가
+# - file.storage.path 설정 설명 추가
+# - 파일 저장 디렉토리 구조 설명 추가
+# - 허용 파일 확장자에 webp, 7z 추가
+# - 19-20일차 구현 예정 옵션 추가
 #
-# 다음 단계 (19-20일차):
-# - FileService에서 이 설정 값들을 @Value 또는 @ConfigurationProperties로 읽어서 사용
-# - 파일 저장 디렉토리 자동 생성 로직 구현
-# - 파일 검증 로직 구현 (크기, 확장자)
+# [36일차 작업 완료] 2025-11-27
+# - server.compression 압축 설정 추가 (성능 최적화)
+# - hibernate.generate_statistics 성능 통계 수집 활성화
+# - logging.level에 Actuator 로깅 추가
+# - management 섹션 대폭 확장:
+#   * Health 상태 체크 그룹 설정 (liveness/readiness)
+#   * Metrics 분포 통계 및 SLO 설정
+#   * 개별 엔드포인트 활성화 설정
+#   * CORS 설정 추가
+# - info 섹션 추가 (애플리케이션 상세 정보)
+#
+# ============================================
+# 접근 가능한 Actuator 엔드포인트
+# ============================================
+#
+# Health (애플리케이션 상태)
+# - GET /actuator/health           : 전체 상태
+# - GET /actuator/health/liveness  : 라이브니스 프로브
+# - GET /actuator/health/readiness : 레디니스 프로브
+#
+# Info (애플리케이션 정보)
+# - GET /actuator/info             : 애플리케이션 정보
+#
+# Metrics (성능 메트릭)
+# - GET /actuator/metrics          : 메트릭 목록
+# - GET /actuator/metrics/{name}   : 특정 메트릭 상세
+#   예시:
+#   - /actuator/metrics/jvm.memory.used
+#   - /actuator/metrics/http.server.requests
+#   - /actuator/metrics/hikaricp.connections.active
+#   - /actuator/metrics/system.cpu.usage
+#
+# Loggers (로깅 제어)
+# - GET  /actuator/loggers         : 로거 목록
+# - GET  /actuator/loggers/{name}  : 특정 로거 레벨
+# - POST /actuator/loggers/{name}  : 로그 레벨 변경
+#   예시: POST /actuator/loggers/com.kmportal.backend
+#         Body: {"configuredLevel": "DEBUG"}
+#
+# Mappings (URL 매핑)
+# - GET /actuator/mappings         : 모든 URL 매핑 정보
+#
+# Caches (캐시)
+# - GET /actuator/caches           : 캐시 정보
+#
+# Environment (환경 변수)
+# - GET /actuator/env              : 환경 변수
+#
+# Beans (Spring Bean)
+# - GET /actuator/beans            : 등록된 Bean 목록
+#
+# ============================================
