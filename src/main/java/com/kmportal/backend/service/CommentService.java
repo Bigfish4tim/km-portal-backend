@@ -35,20 +35,23 @@ import java.util.NoSuchElementException;
  * 2. 대댓글 생성 및 조회
  * 3. 권한 검증 (본인 댓글만 수정/삭제)
  * 4. 댓글 통계 조회
+ * 5. ⭐ 35일차 추가: 댓글/대댓글 작성 시 알림 자동 생성
  *
  * 보안 정책:
  * - 수정: 본인만 가능
  * - 삭제: 본인 또는 관리자만 가능
  *
  * 작성일: 2025년 11월 21일 (30일차)
- * 수정일: 2025년 11월 24일
- *   - Repository 메서드명 변경 (Board_Id, Parent_Id 형식)
- *   - User 엔티티 메서드명 수정 (getName → getFullName)
- *   - UserRepository 메서드명 수정 (findByEmployeeNumber → findByUsername)
+ * 수정일: 2025년 11월 27일 (35일차)
+ *   - NotificationService 연동 추가
+ *   - createComment()에 알림 생성 로직 추가
+ *   - createReply()에 알림 생성 로직 추가
+ *
  * 작성자: 30일차 개발 담당자
+ * 수정자: 35일차 개발 담당자
  *
  * @author KM Portal Dev Team
- * @version 1.2
+ * @version 1.3 (35일차: 알림 연동 추가)
  * @since 2025-11-21
  */
 @Service
@@ -76,6 +79,14 @@ public class CommentService {
      */
     private final UserRepository userRepository;
 
+    /**
+     * ⭐ 35일차 추가: NotificationService - 알림 생성용
+     *
+     * 댓글/대댓글 작성 시 게시글 작성자 또는 댓글 작성자에게
+     * 알림을 전송하기 위해 사용합니다.
+     */
+    private final NotificationService notificationService;
+
     // ================================
     // 댓글 생성 메서드
     // ================================
@@ -85,6 +96,10 @@ public class CommentService {
      *
      * 특정 게시글에 새로운 댓글을 작성합니다.
      * 현재 로그인한 사용자가 작성자로 설정됩니다.
+     *
+     * ⭐ 35일차 업데이트:
+     * - 댓글 작성 시 게시글 작성자에게 알림을 전송합니다.
+     * - 단, 본인 게시글에 본인이 댓글을 작성하는 경우는 제외합니다.
      *
      * @param boardId 게시글 ID
      * @param content 댓글 내용
@@ -120,9 +135,20 @@ public class CommentService {
         // 4. 저장
         Comment savedComment = commentRepository.save(comment);
 
-        // ⚠️ 수정: getName() → getFullName()
         log.info("댓글 작성 완료 - 댓글 ID: {}, 작성자: {}",
                 savedComment.getId(), currentUser.getFullName());
+
+        // ====== 35일차 추가: 알림 생성 ======
+        // 게시글 작성자에게 새 댓글 알림 전송
+        // 단, 본인 게시글에 본인이 댓글을 작성하는 경우는 알림을 보내지 않음
+        try {
+            sendNewCommentNotification(board, currentUser);
+        } catch (Exception e) {
+            // 알림 전송 실패는 댓글 작성에 영향을 주지 않음 (로그만 남김)
+            log.warn("댓글 알림 전송 실패 - 댓글 ID: {}, 오류: {}",
+                    savedComment.getId(), e.getMessage());
+        }
+        // ====================================
 
         return savedComment;
     }
@@ -132,6 +158,10 @@ public class CommentService {
      *
      * 특정 댓글에 대한 대댓글을 작성합니다.
      * 대댓글의 대댓글은 불가능합니다 (1단계만 지원).
+     *
+     * ⭐ 35일차 업데이트:
+     * - 대댓글 작성 시 원 댓글 작성자에게 알림을 전송합니다.
+     * - 단, 본인 댓글에 본인이 대댓글을 작성하는 경우는 제외합니다.
      *
      * @param parentCommentId 부모 댓글 ID
      * @param content 대댓글 내용
@@ -182,7 +212,107 @@ public class CommentService {
         log.info("대댓글 작성 완료 - 대댓글 ID: {}, 부모 댓글 ID: {}",
                 savedReply.getId(), actualParent.getId());
 
+        // ====== 35일차 추가: 알림 생성 ======
+        // 원 댓글 작성자에게 새 답글 알림 전송
+        // 단, 본인 댓글에 본인이 대댓글을 작성하는 경우는 알림을 보내지 않음
+        try {
+            sendNewReplyNotification(actualParent, currentUser, savedReply);
+        } catch (Exception e) {
+            // 알림 전송 실패는 대댓글 작성에 영향을 주지 않음 (로그만 남김)
+            log.warn("대댓글 알림 전송 실패 - 대댓글 ID: {}, 오류: {}",
+                    savedReply.getId(), e.getMessage());
+        }
+        // ====================================
+
         return savedReply;
+    }
+
+    // ================================
+    // 35일차 추가: 알림 전송 헬퍼 메서드
+    // ================================
+
+    /**
+     * 새 댓글 알림 전송
+     *
+     * 게시글 작성자에게 새 댓글 알림을 전송합니다.
+     * 본인 게시글에 본인이 댓글을 작성하는 경우는 알림을 보내지 않습니다.
+     *
+     * @param board 게시글
+     * @param commenter 댓글 작성자
+     */
+    private void sendNewCommentNotification(Board board, User commenter) {
+        // 게시글 작성자 확인
+        User boardAuthor = board.getAuthor();
+
+        // 본인 게시글에 본인이 댓글을 작성하는 경우 알림 제외
+        if (boardAuthor.getUserId().equals(commenter.getUserId())) {
+            log.debug("본인 게시글에 본인 댓글 - 알림 전송 생략");
+            return;
+        }
+
+        // 알림 생성
+        notificationService.createNewCommentNotification(
+                boardAuthor.getUserId(),    // 알림 수신자: 게시글 작성자
+                commenter.getFullName(),    // 댓글 작성자 이름
+                board.getId(),              // 게시글 ID
+                board.getTitle()            // 게시글 제목
+        );
+
+        log.info("새 댓글 알림 전송 완료 - 수신자: {}, 게시글: {}",
+                boardAuthor.getUsername(), board.getTitle());
+    }
+
+    /**
+     * 새 대댓글 알림 전송
+     *
+     * 원 댓글 작성자에게 새 답글 알림을 전송합니다.
+     * 본인 댓글에 본인이 대댓글을 작성하는 경우는 알림을 보내지 않습니다.
+     *
+     * ⭐ 추가로 게시글 작성자에게도 알림을 전송합니다.
+     * (단, 원 댓글 작성자와 게시글 작성자가 같은 경우 중복 전송하지 않음)
+     *
+     * @param parentComment 부모 댓글
+     * @param replier 대댓글 작성자
+     * @param reply 생성된 대댓글
+     */
+    private void sendNewReplyNotification(Comment parentComment, User replier, Comment reply) {
+        // 원 댓글 작성자 확인
+        User commentAuthor = parentComment.getAuthor();
+        Board board = parentComment.getBoard();
+        User boardAuthor = board.getAuthor();
+
+        // 1. 원 댓글 작성자에게 알림 전송
+        // 본인 댓글에 본인이 대댓글을 작성하는 경우 제외
+        if (!commentAuthor.getUserId().equals(replier.getUserId())) {
+            notificationService.createNewReplyNotification(
+                    commentAuthor.getUserId(),  // 알림 수신자: 원 댓글 작성자
+                    replier.getFullName(),      // 대댓글 작성자 이름
+                    board.getId(),              // 게시글 ID
+                    parentComment.getId()       // 원 댓글 ID
+            );
+
+            log.info("새 대댓글 알림 전송 완료 (원 댓글 작성자) - 수신자: {}",
+                    commentAuthor.getUsername());
+        } else {
+            log.debug("본인 댓글에 본인 대댓글 - 알림 전송 생략");
+        }
+
+        // 2. 게시글 작성자에게도 알림 전송 (원 댓글 작성자와 다른 경우)
+        // - 게시글 작성자 ≠ 원 댓글 작성자
+        // - 게시글 작성자 ≠ 대댓글 작성자
+        if (!boardAuthor.getUserId().equals(commentAuthor.getUserId()) &&
+                !boardAuthor.getUserId().equals(replier.getUserId())) {
+
+            notificationService.createNewCommentNotification(
+                    boardAuthor.getUserId(),    // 알림 수신자: 게시글 작성자
+                    replier.getFullName(),      // 대댓글 작성자 이름
+                    board.getId(),              // 게시글 ID
+                    board.getTitle()            // 게시글 제목
+            );
+
+            log.info("새 대댓글 알림 전송 완료 (게시글 작성자) - 수신자: {}",
+                    boardAuthor.getUsername());
+        }
     }
 
     // ================================
@@ -194,8 +324,6 @@ public class CommentService {
      *
      * 특정 게시글의 최상위 댓글을 페이징하여 조회합니다.
      * 대댓글은 별도로 조회해야 합니다.
-     *
-     * ⚠️ Repository 메서드명 변경: findByBoard_IdAndIsDeletedFalseAndParentIsNull
      *
      * @param boardId 게시글 ID
      * @param page 페이지 번호 (0부터 시작)
@@ -211,7 +339,6 @@ public class CommentService {
         // 페이징 정보 생성 (생성일시 오름차순 정렬)
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").ascending());
 
-        // ⚠️ 수정된 메서드명 사용: findByBoard_IdAndIsDeletedFalseAndParentIsNull
         return commentRepository.findByBoard_IdAndIsDeletedFalseAndParentIsNull(boardId, pageable);
     }
 
@@ -260,13 +387,10 @@ public class CommentService {
     /**
      * 게시글별 댓글 수 조회
      *
-     * ⚠️ Repository 메서드명 변경: countByBoard_IdAndIsDeletedFalse
-     *
      * @param boardId 게시글 ID
      * @return 댓글 개수
      */
     public Long getCommentCount(Long boardId) {
-        // ⚠️ 수정된 메서드명 사용: countByBoard_IdAndIsDeletedFalse
         return commentRepository.countByBoard_IdAndIsDeletedFalse(boardId);
     }
 
@@ -302,7 +426,6 @@ public class CommentService {
         // 2. 본인 확인 (본인만 수정 가능)
         User currentUser = getCurrentUser();
         if (!comment.isAuthor(currentUser.getUserId())) {
-            // ⚠️ 수정: getName() → getFullName()
             log.warn("댓글 수정 권한 없음 - 댓글 ID: {}, 요청자: {}", commentId, currentUser.getFullName());
             throw new AccessDeniedException("본인이 작성한 댓글만 수정할 수 있습니다.");
         }
@@ -348,7 +471,6 @@ public class CommentService {
         boolean isAdmin = hasRole("ROLE_ADMIN");
 
         if (!isAuthor && !isAdmin) {
-            // ⚠️ 수정: getName() → getFullName()
             log.warn("댓글 삭제 권한 없음 - 댓글 ID: {}, 요청자: {}", commentId, currentUser.getFullName());
             throw new AccessDeniedException("댓글을 삭제할 권한이 없습니다.");
         }
@@ -356,7 +478,6 @@ public class CommentService {
         // 3. Soft Delete 수행
         comment.softDelete();
 
-        // ⚠️ 수정: getName() → getFullName()
         log.info("댓글 삭제 완료 (Soft Delete) - 댓글 ID: {}, 삭제자: {} (관리자: {})",
                 commentId, currentUser.getFullName(), isAdmin);
     }
@@ -405,10 +526,6 @@ public class CommentService {
      * SecurityContextHolder에서 현재 인증 정보를 가져와
      * 해당 사용자의 User 엔티티를 조회합니다.
      *
-     * ⚠️ 수정: findByEmployeeNumber() → findByUsername()
-     * - UserRepository에 findByEmployeeNumber 메서드가 없음
-     * - findByEmail 또는 findByUsername 사용
-     *
      * @return 현재 로그인한 사용자
      * @throws NoSuchElementException 사용자를 찾을 수 없는 경우
      */
@@ -419,7 +536,6 @@ public class CommentService {
         // 인증 정보에서 사용자 이름(username) 가져오기
         String username = authentication.getName();
 
-        // ⚠️ 수정: findByEmployeeNumber() → findByUsername()
         // 사용자 조회 (username으로 조회 시도, 없으면 email로 조회)
         return userRepository.findByUsername(username)
                 .or(() -> userRepository.findByEmail(username))
@@ -443,7 +559,7 @@ public class CommentService {
 }
 
 /*
- * ====== 수정 내역 (v1.0 → v1.2) ======
+ * ====== 수정 내역 (v1.0 → v1.3) ======
  *
  * v1.1 (2025-11-24):
  * - Repository 메서드명 변경 (연관 엔티티 ID 참조 시 언더스코어 사용)
@@ -453,42 +569,24 @@ public class CommentService {
  * v1.2 (2025-11-24):
  * - User 엔티티 메서드명 수정
  *   - getName() → getFullName() (User.java에는 getName() 메서드가 없음)
- *
  * - UserRepository 메서드명 수정
  *   - findByEmployeeNumber() → findByUsername()
- *   - UserRepository에 findByEmployeeNumber 메서드가 없어서 findByUsername 사용
  *
- * 수정된 위치:
- * 1. createComment() - 로그 출력 부분
- * 2. updateComment() - 로그 출력 부분
- * 3. deleteComment() - 로그 출력 부분 (2곳)
- * 4. getCurrentUser() - userRepository.findByEmployeeNumber → findByUsername
- */
-
-/*
- * ====== User 엔티티 메서드 참고 ======
+ * v1.3 (2025-11-27) - 35일차:
+ * - NotificationService 의존성 추가
+ * - createComment()에 알림 생성 로직 추가
+ *   - 게시글 작성자에게 새 댓글 알림 전송
+ *   - 본인 게시글에 본인 댓글 시 알림 제외
+ * - createReply()에 알림 생성 로직 추가
+ *   - 원 댓글 작성자에게 새 답글 알림 전송
+ *   - 게시글 작성자에게도 알림 전송 (중복 제외)
+ *   - 본인 댓글에 본인 대댓글 시 알림 제외
+ * - sendNewCommentNotification() 헬퍼 메서드 추가
+ * - sendNewReplyNotification() 헬퍼 메서드 추가
  *
- * User.java에서 사용 가능한 주요 메서드:
- * - getUserId(): Long - 사용자 ID
- * - getUsername(): String - 로그인 아이디
- * - getFullName(): String - 사용자 실명 (한글명)
- * - getEmail(): String - 이메일 주소
- * - getDepartment(): String - 부서명
- * - getPosition(): String - 직책
- *
- * 주의: getName() 메서드는 존재하지 않음!
- *       getFullName()을 사용해야 함
- */
-
-/*
- * ====== UserRepository 메서드 참고 ======
- *
- * UserRepository.java에서 사용 가능한 주요 조회 메서드:
- * - findByUsername(String username): Optional<User>
- * - findByEmail(String email): Optional<User>
- * - existsByUsername(String username): boolean
- * - existsByEmail(String email): boolean
- *
- * 주의: findByEmployeeNumber() 메서드는 존재하지 않음!
- *       findByUsername() 또는 findByEmail()을 사용해야 함
+ * 알림 전송 정책:
+ * 1. 댓글 작성 → 게시글 작성자에게 알림
+ * 2. 대댓글 작성 → 원 댓글 작성자에게 알림 + 게시글 작성자에게 알림
+ * 3. 본인에게는 알림 전송하지 않음
+ * 4. 알림 전송 실패해도 댓글/대댓글 작성은 정상 진행
  */
