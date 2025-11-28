@@ -8,6 +8,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.BatchSize;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,51 +25,108 @@ import java.util.List;
  * 3. 게시글(Board)과 다대일 관계
  * 4. 작성자(User)와 다대일 관계
  *
- * Self Referencing 관계란?
- * - 같은 테이블을 자기 자신이 참조하는 관계
- * - parent 필드: 부모 댓글을 참조 (대댓글일 경우)
- * - replies 필드: 자식 댓글 목록 (이 댓글에 달린 대댓글들)
- * - parent가 null이면 최상위 댓글 (일반 댓글)
- * - parent가 있으면 대댓글
- *
- * 예시 구조:
- * 댓글 1 (parent = null, 최상위 댓글)
- *  ├─ 대댓글 1-1 (parent = 댓글 1)
- *  └─ 대댓글 1-2 (parent = 댓글 1)
- * 댓글 2 (parent = null, 최상위 댓글)
+ * ==== 37일차 업데이트: 쿼리 최적화 ====
+ * 1. N+1 문제 해결을 위한 @BatchSize 추가
+ * 2. 복합 인덱스 추가 (게시글별 댓글 조회 최적화)
+ * 3. 대댓글 조회 최적화 인덱스
  *
  * 작성일: 2025년 11월 21일 (30일차)
- * 작성자: 30일차 개발 담당자
+ * 수정일: 2025년 11월 28일 (37일차 - 인덱스 최적화)
+ * 작성자: KM Portal Dev Team
  *
  * @author KM Portal Dev Team
- * @version 1.0
+ * @version 1.1 (37일차 인덱스 최적화)
  * @since 2025-11-21
  */
 @Entity
-@Table(name = "comments",  // 데이터베이스 테이블명을 'comments'로 지정
+@Table(name = "comments",
         indexes = {
-                // 인덱스 생성: 자주 조회되는 컬럼에 인덱스를 걸어 검색 성능 향상
-                @Index(name = "idx_comment_board", columnList = "board_id"),      // 게시글별 댓글 조회 최적화
-                @Index(name = "idx_comment_author", columnList = "author_id"),     // 작성자별 댓글 조회 최적화
-                @Index(name = "idx_comment_parent", columnList = "parent_id"),     // 대댓글 조회 최적화
-                @Index(name = "idx_comment_created_at", columnList = "created_at"), // 날짜 정렬 최적화
-                @Index(name = "idx_comment_deleted", columnList = "is_deleted")    // 삭제 여부 필터링 최적화
+                // ======================================
+                // 기존 단일 컬럼 인덱스
+                // ======================================
+
+                /**
+                 * 게시글별 댓글 조회 인덱스
+                 */
+                @Index(name = "idx_comment_board", columnList = "board_id"),
+
+                /**
+                 * 작성자별 댓글 조회 인덱스
+                 */
+                @Index(name = "idx_comment_author", columnList = "author_id"),
+
+                /**
+                 * 대댓글 조회 인덱스 (부모 댓글 ID)
+                 */
+                @Index(name = "idx_comment_parent", columnList = "parent_id"),
+
+                // ======================================
+                // 37일차 추가: 복합 인덱스 (쿼리 패턴 최적화)
+                // ======================================
+
+                /**
+                 * 복합 인덱스 1: 게시글별 삭제되지 않은 댓글 + 작성일시
+                 *
+                 * 최적화 대상 쿼리:
+                 * SELECT * FROM comments
+                 * WHERE board_id = ? AND is_deleted = false
+                 * ORDER BY created_at ASC
+                 *
+                 * 사용 빈도: 매우 높음 (게시글 상세에서 댓글 목록)
+                 */
+                @Index(name = "idx_comment_board_active_created",
+                        columnList = "board_id, is_deleted, created_at ASC"),
+
+                /**
+                 * 복합 인덱스 2: 게시글별 최상위 댓글 (parent_id가 NULL)
+                 *
+                 * 최적화 대상 쿼리:
+                 * SELECT * FROM comments
+                 * WHERE board_id = ? AND parent_id IS NULL AND is_deleted = false
+                 * ORDER BY created_at ASC
+                 *
+                 * 사용 빈도: 높음 (댓글 목록 - 대댓글 제외)
+                 */
+                @Index(name = "idx_comment_board_toplevel",
+                        columnList = "board_id, parent_id, is_deleted, created_at ASC"),
+
+                /**
+                 * 복합 인덱스 3: 부모 댓글별 대댓글
+                 *
+                 * 최적화 대상 쿼리:
+                 * SELECT * FROM comments
+                 * WHERE parent_id = ? AND is_deleted = false
+                 * ORDER BY created_at ASC
+                 *
+                 * 사용 빈도: 높음 (대댓글 목록)
+                 */
+                @Index(name = "idx_comment_parent_active",
+                        columnList = "parent_id, is_deleted, created_at ASC"),
+
+                /**
+                 * 복합 인덱스 4: 작성자별 삭제되지 않은 댓글
+                 *
+                 * 최적화 대상 쿼리:
+                 * SELECT * FROM comments
+                 * WHERE author_id = ? AND is_deleted = false
+                 * ORDER BY created_at DESC
+                 *
+                 * 사용 빈도: 중간 (마이페이지 - 내 댓글)
+                 */
+                @Index(name = "idx_comment_author_active",
+                        columnList = "author_id, is_deleted, created_at DESC")
         })
-@Data  // Lombok: Getter, Setter, toString, equals, hashCode 자동 생성
-@EqualsAndHashCode(callSuper = false)  // BaseEntity 상속 시 경고 제거
-@NoArgsConstructor  // Lombok: 파라미터 없는 기본 생성자 자동 생성 (JPA 필수)
-@AllArgsConstructor // Lombok: 모든 필드를 파라미터로 받는 생성자 자동 생성
-@Builder  // Lombok: 빌더 패턴 자동 생성 (객체 생성을 더 쉽고 읽기 좋게)
+@Data
+@EqualsAndHashCode(callSuper = false)
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Comment extends BaseEntity {
 
     // ====== 기본 필드 ======
 
     /**
      * 댓글 ID (Primary Key)
-     *
-     * @GeneratedValue: 자동 증가 전략 사용
-     * - GenerationType.IDENTITY: 데이터베이스의 AUTO_INCREMENT 기능 활용
-     * - MySQL/H2의 경우 INSERT 시 자동으로 1, 2, 3... 순서대로 증가
      */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -77,13 +135,7 @@ public class Comment extends BaseEntity {
 
     /**
      * 댓글 내용 (필수)
-     *
-     * @NotBlank: 빈 문자열(""), 공백(" "), null 모두 불허
-     * - 사용자가 댓글 내용을 입력하지 않으면 에러 발생
-     *
-     * 최대 길이: 1000자
-     * - 일반적인 댓글은 1000자면 충분함
-     * - 게시글 본문과 달리 짧은 텍스트이므로 @Lob 사용하지 않음
+     * 최대 1000자
      */
     @Column(name = "content", nullable = false, length = 1000)
     @NotBlank(message = "댓글 내용은 필수 입력 항목입니다.")
@@ -95,17 +147,9 @@ public class Comment extends BaseEntity {
     /**
      * 게시글 (Board와 다대일 관계)
      *
-     * @ManyToOne: 여러 댓글(Comment)은 하나의 게시글(Board)에 속함
-     * - Many = Comment (여러 개)
-     * - One = Board (한 개)
-     * - 한 게시글에 여러 댓글이 달릴 수 있음
-     *
-     * fetch = FetchType.LAZY: 지연 로딩 (성능 최적화)
-     * - 댓글 조회 시 게시글 정보는 실제로 필요할 때만 조회
-     *
-     * @JoinColumn: 외래키(Foreign Key) 설정
-     * - name = "board_id": 데이터베이스 컬럼명
-     * - nullable = false: 댓글은 반드시 게시글에 속해야 함
+     * 37일차 최적화:
+     * - LAZY 로딩 유지
+     * - 필요 시 JOIN FETCH 사용
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "board_id", nullable = false)
@@ -115,11 +159,9 @@ public class Comment extends BaseEntity {
     /**
      * 댓글 작성자 (User와 다대일 관계)
      *
-     * @ManyToOne: 여러 댓글(Comment)은 한 명의 사용자(User)에게 속함
-     * - 한 사용자는 여러 댓글을 작성할 수 있음
-     *
-     * fetch = FetchType.LAZY: 지연 로딩 (성능 최적화)
-     * - 댓글 조회 시 작성자 정보는 실제로 필요할 때만 조회
+     * 37일차 최적화:
+     * - LAZY 로딩 유지
+     * - 댓글 목록 조회 시 @BatchSize로 N+1 문제 해결
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "author_id", nullable = false)
@@ -128,36 +170,27 @@ public class Comment extends BaseEntity {
 
     /**
      * 부모 댓글 (Self Referencing - 대댓글 지원)
-     *
-     * @ManyToOne: 여러 대댓글은 하나의 부모 댓글을 가질 수 있음
-     *
-     * nullable = true: 최상위 댓글은 부모가 없음
-     * - parent == null: 일반 댓글 (최상위)
-     * - parent != null: 대댓글
-     *
-     * 예시:
-     * - "좋은 글이네요!" (parent = null) → 일반 댓글
-     * - "저도 그렇게 생각해요!" (parent = 위 댓글) → 대댓글
+     * NULL이면 최상위 댓글
      */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parent_id")  // nullable = true가 기본값
+    @JoinColumn(name = "parent_id")
     private Comment parent;
 
     /**
      * 대댓글 목록 (Self Referencing의 반대 방향)
      *
-     * @OneToMany: 하나의 댓글에 여러 대댓글이 달릴 수 있음
-     * - mappedBy = "parent": Comment 엔티티의 parent 필드와 매핑
+     * 37일차 최적화:
+     * - @BatchSize(size = 20) 추가
+     * - 한 번에 최대 20개의 대댓글을 배치로 로드
+     * - N+1 문제 방지
      *
-     * cascade = CascadeType.ALL: 연관 엔티티 작업 전파
-     * - 부모 댓글 삭제 시 대댓글도 함께 처리 (단, Soft Delete 사용 권장)
-     *
-     * orphanRemoval = true: 고아 객체 자동 삭제
-     * - replies에서 제거된 대댓글은 자동 삭제
-     *
-     * @Builder.Default: Builder 패턴 사용 시 기본값 설정
+     * @BatchSize 설명:
+     * - 예: 10개의 댓글이 있고 각각 대댓글이 있을 때
+     * - @BatchSize 없으면: 10번의 추가 쿼리 발생 (N+1)
+     * - @BatchSize(20) 있으면: 1번의 IN 쿼리로 모두 조회
      */
     @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL, orphanRemoval = true)
+    @BatchSize(size = 20)  // 37일차 추가: N+1 문제 방지
     @Builder.Default
     private List<Comment> replies = new ArrayList<>();
 
@@ -165,21 +198,7 @@ public class Comment extends BaseEntity {
 
     /**
      * 삭제 여부 (Soft Delete)
-     *
-     * true: 삭제된 댓글 (목록에 표시 안 됨)
-     * false: 정상 댓글
-     *
-     * 기본값은 false (정상)입니다.
-     *
-     * Soft Delete 장점:
-     * - 삭제된 댓글 복구 가능
-     * - 대댓글이 있어도 안전하게 삭제
-     * - "삭제된 댓글입니다" 표시 가능
-     * - 통계 데이터 유지
-     *
-     * 삭제된 댓글 표시 방식:
-     * - 대댓글이 없는 경우: 완전히 숨김
-     * - 대댓글이 있는 경우: "삭제된 댓글입니다" 표시
+     * 기본값 false
      */
     @Column(name = "is_deleted", nullable = false)
     @Builder.Default
@@ -189,81 +208,43 @@ public class Comment extends BaseEntity {
 
     /**
      * 댓글 논리적 삭제 메서드
-     *
-     * 실제 데이터베이스에서 삭제하지 않고 삭제 플래그만 설정합니다.
-     *
-     * 사용 예시:
-     * comment.softDelete();
-     * commentRepository.save(comment);
      */
     public void softDelete() {
         this.isDeleted = true;
-        // BaseEntity의 softDelete()도 함께 호출 (deletedAt 설정)
         super.softDelete();
     }
 
     /**
      * 댓글 복구 메서드
-     *
-     * 삭제된 댓글을 복구합니다.
-     *
-     * 사용 예시:
-     * comment.restore();
-     * commentRepository.save(comment);
      */
     public void restore() {
         this.isDeleted = false;
-        // BaseEntity의 restore()도 함께 호출
         super.restore();
     }
 
     /**
-     * 댓글이 삭제된 상태인지 확인하는 메서드
-     *
-     * @return true: 삭제됨, false: 정상
-     *
-     * 사용 예시:
-     * if (comment.isDeleted()) {
-     *     return "삭제된 댓글입니다.";
-     * }
+     * 댓글이 삭제된 상태인지 확인
      */
     public boolean isDeleted() {
         return Boolean.TRUE.equals(this.isDeleted);
     }
 
     /**
-     * 대댓글인지 확인하는 메서드
-     *
-     * @return true: 대댓글, false: 최상위 댓글
-     *
-     * 사용 예시:
-     * if (comment.isReply()) {
-     *     // 대댓글 스타일 적용 (들여쓰기 등)
-     * }
+     * 대댓글인지 확인
      */
     public boolean isReply() {
         return this.parent != null;
     }
 
     /**
-     * 최상위 댓글인지 확인하는 메서드
-     *
-     * @return true: 최상위 댓글, false: 대댓글
+     * 최상위 댓글인지 확인
      */
     public boolean isTopLevel() {
         return this.parent == null;
     }
 
     /**
-     * 특정 사용자가 작성한 댓글인지 확인하는 메서드
-     *
-     * @param userId 확인할 사용자 ID
-     * @return true: 해당 사용자가 작성함, false: 다른 사용자가 작성함
-     *
-     * 사용 예시:
-     * if (!comment.isAuthor(currentUserId)) {
-     *     throw new UnauthorizedException("본인이 작성한 댓글만 수정/삭제할 수 있습니다.");
-     * }
+     * 특정 사용자가 작성한 댓글인지 확인
      */
     public boolean isAuthor(Long userId) {
         return this.author != null &&
@@ -273,14 +254,6 @@ public class Comment extends BaseEntity {
 
     /**
      * 댓글 내용 업데이트 메서드
-     *
-     * 댓글 수정 시 내용을 업데이트합니다.
-     *
-     * @param content 새로운 댓글 내용
-     *
-     * 사용 예시:
-     * comment.updateContent("수정된 댓글 내용");
-     * commentRepository.save(comment);
      */
     public void updateContent(String content) {
         if (content != null && !content.trim().isEmpty()) {
@@ -290,28 +263,15 @@ public class Comment extends BaseEntity {
 
     /**
      * 대댓글 추가 메서드
-     *
-     * 이 댓글에 대댓글을 추가합니다.
-     * 양방향 관계를 유지하기 위해 parent도 함께 설정합니다.
-     *
-     * @param reply 추가할 대댓글
-     *
-     * 사용 예시:
-     * Comment reply = Comment.builder().content("대댓글입니다").build();
-     * parentComment.addReply(reply);
      */
     public void addReply(Comment reply) {
         this.replies.add(reply);
         reply.setParent(this);
-        reply.setBoard(this.board);  // 대댓글도 같은 게시글에 속함
+        reply.setBoard(this.board);
     }
 
     /**
      * 대댓글 제거 메서드
-     *
-     * 이 댓글에서 대댓글을 제거합니다.
-     *
-     * @param reply 제거할 대댓글
      */
     public void removeReply(Comment reply) {
         this.replies.remove(reply);
@@ -320,10 +280,6 @@ public class Comment extends BaseEntity {
 
     /**
      * 대댓글 개수 조회 메서드
-     *
-     * 삭제되지 않은 대댓글의 개수를 반환합니다.
-     *
-     * @return 대댓글 개수
      */
     public int getReplyCount() {
         if (this.replies == null) {
@@ -335,11 +291,7 @@ public class Comment extends BaseEntity {
     }
 
     /**
-     * 대댓글이 있는지 확인하는 메서드
-     *
-     * 삭제되지 않은 대댓글이 있는지 확인합니다.
-     *
-     * @return true: 대댓글 있음, false: 대댓글 없음
+     * 대댓글이 있는지 확인
      */
     public boolean hasReplies() {
         return getReplyCount() > 0;
@@ -347,10 +299,6 @@ public class Comment extends BaseEntity {
 
     /**
      * 게시글 ID 조회 편의 메서드
-     *
-     * 댓글이 속한 게시글의 ID를 반환합니다.
-     *
-     * @return 게시글 ID (board가 null이면 null 반환)
      */
     public Long getBoardId() {
         return this.board != null ? this.board.getId() : null;
@@ -358,10 +306,6 @@ public class Comment extends BaseEntity {
 
     /**
      * 작성자 ID 조회 편의 메서드
-     *
-     * 댓글 작성자의 ID를 반환합니다.
-     *
-     * @return 작성자 ID (author가 null이면 null 반환)
      */
     public Long getAuthorId() {
         return this.author != null ? this.author.getUserId() : null;
@@ -369,10 +313,6 @@ public class Comment extends BaseEntity {
 
     /**
      * 작성자 이름 조회 편의 메서드
-     *
-     * 댓글 작성자의 이름을 반환합니다.
-     *
-     * @return 작성자 이름 (author가 null이면 "알 수 없음" 반환)
      */
     public String getAuthorName() {
         return this.author != null ? this.author.getFullName() : "알 수 없음";
@@ -380,10 +320,6 @@ public class Comment extends BaseEntity {
 
     /**
      * 부모 댓글 ID 조회 편의 메서드
-     *
-     * 대댓글인 경우 부모 댓글의 ID를 반환합니다.
-     *
-     * @return 부모 댓글 ID (parent가 null이면 null 반환)
      */
     public Long getParentId() {
         return this.parent != null ? this.parent.getId() : null;
@@ -391,52 +327,38 @@ public class Comment extends BaseEntity {
 }
 
 /*
- * ====== Self Referencing 관계 상세 설명 ======
+ * ====== 37일차 N+1 문제 해결 가이드 ======
  *
- * Self Referencing이란?
- * - 같은 테이블(엔티티)이 자기 자신을 참조하는 관계
- * - 계층 구조를 표현할 때 사용 (댓글-대댓글, 카테고리-하위카테고리 등)
+ * 1. N+1 문제란?
+ *    - 1개의 쿼리로 N개의 엔티티를 조회 후
+ *    - 각 엔티티의 연관 엔티티를 조회하기 위해 N번의 추가 쿼리 발생
+ *    - 예: 10개 댓글 조회 후 각 댓글의 작성자를 조회하면 11번의 쿼리
  *
- * 데이터베이스 구조:
- * +----------+------------+-----------+-----------+---------+
- * |comment_id| content    | board_id  | author_id | parent_id|
- * +----------+------------+-----------+-----------+---------+
- * |    1     | "댓글1"    |     1     |     1     |   NULL   | ← 최상위
- * |    2     | "대댓글1"  |     1     |     2     |     1    | ← 1번의 대댓글
- * |    3     | "대댓글2"  |     1     |     3     |     1    | ← 1번의 대댓글
- * |    4     | "댓글2"    |     1     |     1     |   NULL   | ← 최상위
- * +----------+------------+-----------+-----------+---------+
+ * 2. 해결 방법:
  *
- * 조회 방법:
- * 1. 최상위 댓글만 조회: WHERE parent_id IS NULL
- * 2. 특정 댓글의 대댓글 조회: WHERE parent_id = {댓글ID}
+ *    a) @BatchSize (이 파일에서 사용)
+ *       - 연관 엔티티를 IN 쿼리로 배치 조회
+ *       - 설정이 간단하고 기존 코드 변경 불필요
+ *       - 단점: 배치 크기 튜닝 필요
  *
- * 주의사항:
- * 1. 무한 루프 방지: 대댓글의 대댓글은 1단계만 지원 권장
- * 2. N+1 문제: 대댓글 조회 시 별도 쿼리 필요
- * 3. 삭제 처리: 대댓글이 있는 댓글 삭제 시 Soft Delete 권장
- */
-
-/*
- * ====== 향후 추가할 수 있는 기능들 ======
+ *    b) JOIN FETCH (Repository에서 사용)
+ *       - JPQL에서 연관 엔티티를 함께 조회
+ *       - 예: SELECT c FROM Comment c JOIN FETCH c.author
+ *       - 장점: 한 번의 쿼리로 모든 데이터 조회
+ *       - 단점: 페이징과 함께 사용 시 주의 필요
  *
- * 1. 좋아요 수:
- *    @Column(name = "like_count")
- *    private Integer likeCount = 0;
+ *    c) EntityGraph
+ *       - @EntityGraph 어노테이션으로 페치 전략 지정
+ *       - 장점: 선언적, 재사용 가능
+ *       - 단점: 복잡한 그래프에서 관리 어려움
  *
- * 2. 신고 횟수:
- *    @Column(name = "report_count")
- *    private Integer reportCount = 0;
+ * 3. 모니터링:
+ *    - application.yml에서 hibernate.generate_statistics: true 설정
+ *    - Actuator /actuator/metrics/hibernate.statements 확인
+ *    - 로그에서 쿼리 횟수 확인
  *
- * 3. 수정 여부:
- *    @Column(name = "is_edited")
- *    private Boolean isEdited = false;
- *
- * 4. 댓글 깊이 (다단계 대댓글 지원):
- *    @Column(name = "depth")
- *    private Integer depth = 0;  // 0: 최상위, 1: 대댓글, 2: 대대댓글...
- *
- * 5. 비밀 댓글:
- *    @Column(name = "is_secret")
- *    private Boolean isSecret = false;
+ * 4. @BatchSize 적정 크기:
+ *    - 너무 작으면: 배치 쿼리 횟수 증가
+ *    - 너무 크면: IN 절이 길어져 성능 저하
+ *    - 권장: 10~50 사이 (테스트 후 조정)
  */

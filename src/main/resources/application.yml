@@ -5,11 +5,12 @@
 # 버전 이력:
 # - 18일차: 파일 시스템 설정 추가 (2025-11-12)
 # - 36일차: API 성능 분석 도구 설정 강화 (2025-11-27)
+# - 37일차: 쿼리 최적화 및 느린 쿼리 로깅 설정 (2025-11-28)
 # ============================================
 
 # ===== 서버 설정 =====
 server:
-  port: 8080  # 백엔드 API 서버 포트
+  port: 8080
   servlet:
     context-path: /
     encoding:
@@ -19,17 +20,13 @@ server:
   error:
     include-message: always
     include-binding-errors: always
-
-  # ===== 36일차 추가: 응답 압축 설정 (성능 최적화) =====
-  # API 응답 크기를 줄여 네트워크 대역폭을 절약합니다.
   compression:
     enabled: true
     mime-types: application/json,application/xml,text/html,text/xml,text/plain,application/javascript,text/css
-    min-response-size: 1024  # 1KB 이상인 응답만 압축
+    min-response-size: 1024
 
 # ===== Spring 기본 설정 =====
 spring:
-  # 애플리케이션 정보
   application:
     name: km-portal-backend
 
@@ -55,101 +52,142 @@ spring:
   jpa:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
-      ddl-auto: create-drop  # 개발환경: 매번 테이블 재생성
-    show-sql: true          # SQL 로그 출력
+      ddl-auto: create-drop
+    show-sql: true
     properties:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect
-        format_sql: true    # SQL 포맷팅
-        use_sql_comments: true  # SQL 주석 출력
+        format_sql: true
+        use_sql_comments: true
         jdbc:
-          batch_size: 20    # 배치 처리 크기
-        order_inserts: true # INSERT 순서 최적화
-        order_updates: true # UPDATE 순서 최적화
-        # ===== 36일차 추가: 성능 통계 수집 =====
-        # Hibernate 쿼리 성능 분석을 위한 통계 수집 활성화
-        # Actuator /actuator/metrics에서 hibernate.* 메트릭 확인 가능
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
         generate_statistics: true
-    defer-datasource-initialization: true  # 데이터 초기화 지연
+
+        # ============================================
+        # 37일차 추가: 느린 쿼리 로깅 설정
+        # ============================================
+        #
+        # 이 설정은 지정된 시간(밀리초)보다 오래 걸리는 쿼리를 로그로 출력합니다.
+        # 성능 문제 진단 및 쿼리 최적화에 매우 유용합니다.
+        #
+        # session.events.log.LOG_QUERIES_SLOWER_THAN_MS:
+        # - 100: 100ms 이상 걸리는 쿼리 로그 출력
+        # - 0 또는 음수: 느린 쿼리 로깅 비활성화
+        #
+        # 권장 값:
+        # - 개발 환경: 100 (민감하게 탐지)
+        # - 운영 환경: 1000 (1초 이상만 로그)
+        #
+        session:
+          events:
+            log:
+              LOG_QUERIES_SLOWER_THAN_MS: 100
+
+    defer-datasource-initialization: true
 
   # SQL 초기화 설정
   sql:
     init:
-      mode: always        # 항상 초기 데이터 로드
-      data-locations: classpath:data-dev.sql  # 초기 데이터 파일
+      mode: always
+      data-locations: classpath:data-dev.sql
       encoding: UTF-8
 
   # H2 데이터베이스 콘솔 설정 (개발용)
   h2:
     console:
-      enabled: true       # H2 콘솔 활성화
-      path: /h2-console   # 접속 경로
+      enabled: true
+      path: /h2-console
       settings:
-        web-allow-others: true  # 외부 접속 허용 (개발용)
-        trace: false            # 트레이스 비활성화
+        web-allow-others: true
+        trace: false
 
   # Jackson JSON 설정
   jackson:
     serialization:
-      write-dates-as-timestamps: false  # 날짜를 ISO 8601 형식으로
-      indent-output: true               # JSON 출력 포맷팅 (개발용)
+      write-dates-as-timestamps: false
+      indent-output: true
     deserialization:
-      fail-on-unknown-properties: false # 알 수 없는 속성 무시
+      fail-on-unknown-properties: false
     property-naming-strategy: LOWER_CAMEL_CASE
-    time-zone: Asia/Seoul                 # 시간대 설정
+    time-zone: Asia/Seoul
 
-  # ===== 파일 업로드 설정 (18일차 작업) =====
+  # 파일 업로드 설정
   servlet:
     multipart:
-      enabled: true             # 멀티파트 업로드 활성화
-      max-file-size: 50MB       # 단일 파일 최대 크기
-      max-request-size: 100MB   # 전체 요청 최대 크기 (여러 파일 동시 업로드 시)
-      file-size-threshold: 2KB  # 이 크기 초과 시 디스크에 임시 저장, 이하는 메모리
-      # location: ${java.io.tmpdir}  # 임시 파일 저장 위치 (기본값: 시스템 임시 디렉토리)
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 100MB
+      file-size-threshold: 2KB
 
-  # 메시지 소스 설정 (국제화)
+  # 메시지 소스 설정
   messages:
     basename: messages
     encoding: UTF-8
-    cache-duration: 3600  # 1시간 캐시
+    cache-duration: 3600
 
 # ===== JWT 토큰 설정 =====
 jwt:
-  # JWT 서명용 비밀키 (실제 운영에서는 환경변수로 설정)
   secret: myVerySecretKeyForKMPortal2025!@#$%^&*()_+1234567890
-
-  # 토큰 만료 시간 설정 (밀리초 단위)
   expiration:
-    access-token: 86400000    # 24시간 (24 * 60 * 60 * 1000)
-    refresh-token: 604800000  # 7일 (7 * 24 * 60 * 60 * 1000)
-
-  # 토큰 헤더 설정
+    access-token: 86400000
+    refresh-token: 604800000
   header:
-    authorization: Authorization  # 토큰이 포함될 헤더명
-    prefix: "Bearer "            # 토큰 접두사
-
-  # JWT 발급자 정보
+    authorization: Authorization
+    prefix: "Bearer "
   issuer: km-portal-backend
-
-  # 토큰 갱신 관련 설정
   refresh:
-    enabled: true               # 리프레시 토큰 활성화
-    auto-refresh-threshold: 300000  # 5분 전에 자동 갱신 (5 * 60 * 1000)
+    enabled: true
+    auto-refresh-threshold: 300000
 
-# ===== 로깅 설정 =====
+# ============================================
+# 로깅 설정
+# 37일차 업데이트: 쿼리 성능 분석 로깅 강화
+# ============================================
 logging:
   level:
     root: INFO
-    com.kmportal.backend: DEBUG           # 애플리케이션 로그 레벨
-    org.springframework.web: DEBUG        # Spring Web 로그
-    org.springframework.security: DEBUG   # Spring Security 로그
-    org.hibernate.SQL: DEBUG             # SQL 로그
-    org.hibernate: DEBUG
+    com.kmportal.backend: DEBUG
+
+    # Spring 관련 로깅
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
+
+    # ============================================
+    # 37일차: Hibernate 쿼리 성능 로깅 설정
+    # ============================================
+
+    # SQL 쿼리 출력
+    org.hibernate.SQL: DEBUG
+
+    # SQL 바인딩 파라미터 출력 (? 에 들어가는 실제 값)
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+    # 37일차 추가: Hibernate 통계 로깅
+    # 실행된 쿼리 수, 캐시 히트율 등 통계 정보 출력
+    org.hibernate.stat: DEBUG
+
+    # 37일차 추가: 느린 쿼리 로깅
+    # LOG_QUERIES_SLOWER_THAN_MS 설정과 함께 사용
+    org.hibernate.SQL_SLOW: WARN
+
+    # 37일차 추가: 엔티티 로딩 분석 (N+1 문제 탐지용)
+    # 주의: 매우 상세한 로그가 출력되므로 필요할 때만 활성화
+    # org.hibernate.engine.internal.StatisticalLoggingSessionEventListener: DEBUG
+
+    # H2 및 JDBC 로깅
     org.h2: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE  # SQL 파라미터 로그
-    io.jsonwebtoken: DEBUG                # JWT 라이브러리 로그
-    # ===== 36일차 추가: Actuator 로깅 =====
+
+    # JWT 라이브러리 로그
+    io.jsonwebtoken: DEBUG
+
+    # Actuator 로깅
     org.springframework.boot.actuate: INFO
+
+    # 37일차 추가: 커넥션 풀 모니터링
+    com.zaxxer.hikari: INFO
+    com.zaxxer.hikari.HikariConfig: DEBUG
 
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
@@ -162,24 +200,19 @@ logging:
 
 # ===== 보안 설정 =====
 security:
-  # 비밀번호 정책
   password:
-    min-length: 4           # 최소 길이 (개발용으로 짧게 설정)
-    max-length: 100         # 최대 길이
-    require-uppercase: false # 대문자 필수 여부
-    require-lowercase: false # 소문자 필수 여부
-    require-numbers: false   # 숫자 필수 여부
-    require-special: false   # 특수문자 필수 여부
-
-  # 계정 잠금 정책
+    min-length: 4
+    max-length: 100
+    require-uppercase: false
+    require-lowercase: false
+    require-numbers: false
+    require-special: false
   account-lock:
-    max-failed-attempts: 5  # 최대 로그인 실패 횟수
-    lock-duration: 1800     # 잠금 시간 (초) - 30분
-
-  # CORS 설정
+    max-failed-attempts: 5
+    lock-duration: 1800
   cors:
     allowed-origins:
-      - http://localhost:3000   # Vue.js 개발 서버
+      - http://localhost:3000
       - http://127.0.0.1:3000
     allowed-methods:
       - GET
@@ -193,48 +226,17 @@ security:
     allow-credentials: true
     max-age: 3600
 
-# ===== 파일 관리 설정 (18일차 작업) =====
+# ===== 파일 관리 설정 =====
 file:
   storage:
-    # ===== 파일 저장 경로 설정 =====
-    # 개발환경: 사용자 홈 디렉토리 하위에 저장
-    # Windows: C:\Users\사용자명\km-portal-files
-    # Linux/Mac: /home/사용자명/km-portal-files
     path: ${user.home}/km-portal-files
-
-    # 프로덕션 환경에서는 절대 경로 사용 권장
-    # 예시:
-    # Windows: C:/km-portal/uploads
-    # Linux: /var/km-portal/uploads
-
-    # ===== 파일 저장 디렉토리 구조 =====
-    # 파일은 다음과 같은 구조로 자동 분류됩니다:
-    # {path}/
-    #   ├── 2025/
-    #   │   ├── 11/
-    #   │   │   ├── uuid1.jpg
-    #   │   │   ├── uuid2.pdf
-    #   │   │   └── uuid3.docx
-    #   │   └── 12/
-    #   └── 2026/
-    #
-    # 장점:
-    # - 연도/월별 자동 분류
-    # - 파일명 중복 방지 (UUID 사용)
-    # - 관리 및 백업 용이
-    # - 파일 시스템 성능 최적화
-
-    # ===== 허용 파일 확장자 =====
     allowed-extensions:
-      # 이미지 파일
       - jpg
       - jpeg
       - png
       - gif
       - bmp
-      - webp      # 18일차 추가: 웹 최적화 이미지
-
-      # 문서 파일
+      - webp
       - pdf
       - doc
       - docx
@@ -243,50 +245,32 @@ file:
       - ppt
       - pptx
       - txt
-      - hwp       # 한글 문서
-
-      # 압축 파일
+      - hwp
       - zip
       - rar
-      - 7z        # 18일차 추가: 7-Zip 압축
-
-    # ===== 파일 크기 제한 =====
-    max-size: 50MB          # 개별 파일 최대 크기
-    max-total-size: 500MB   # 사용자당 전체 파일 크기 제한
-
-    # ===== 파일 저장 옵션 (19-20일차 구현) =====
-    # 디렉토리 자동 생성 여부
+      - 7z
+    max-size: 50MB
+    max-total-size: 500MB
     auto-create-directory: true
-
-    # 파일명 생성 방식
-    filename-strategy: uuid  # uuid, timestamp, original
-
-    # 중복 파일 처리 방식
-    duplicate-strategy: rename  # rename, overwrite, error
+    filename-strategy: uuid
+    duplicate-strategy: rename
 
 # ===== 애플리케이션 커스텀 설정 =====
 app:
-  # 애플리케이션 정보
   name: KM 포털
   version: 1.0.0
   description: "지식관리 통합 업무 시스템"
-
-  # 개발 모드 설정
   dev:
-    enabled: true                    # 개발 모드 활성화
-    create-test-data: true          # 테스트 데이터 생성
-    enable-swagger: true            # API 문서 활성화
-    show-sql-queries: true          # SQL 쿼리 표시
-
-  # 사용자 설정
+    enabled: true
+    create-test-data: true
+    enable-swagger: true
+    show-sql-queries: true
   user:
-    default-role: ROLE_USER         # 기본 사용자 권한
-    auto-activate: true             # 신규 사용자 자동 활성화
-    require-email-verification: false  # 이메일 인증 필수 여부
-
-  # 메일 설정 (향후 구현용)
+    default-role: ROLE_USER
+    auto-activate: true
+    require-email-verification: false
   mail:
-    enabled: false                  # 메일 기능 활성화 여부
+    enabled: false
     smtp:
       host: smtp.gmail.com
       port: 587
@@ -294,133 +278,112 @@ app:
       password: ${MAIL_PASSWORD:}
       auth: true
       starttls: true
-
-  # 캐시 설정
   cache:
-    enabled: true                   # 캐시 활성화
-    default-ttl: 3600              # 기본 TTL (초)
-    max-entries: 10000             # 최대 엔트리 수
+    enabled: true
+    default-ttl: 3600
+    max-entries: 10000
 
 # ============================================
 # Actuator 설정 (모니터링)
-# 36일차 업데이트: API 성능 분석 도구 설정 강화
+# 37일차 업데이트: 쿼리 성능 메트릭 추가
 # ============================================
 management:
-  # ===== 엔드포인트 노출 설정 =====
   endpoints:
     web:
       exposure:
-        # 노출할 엔드포인트 목록
-        # - health: 애플리케이션 상태
-        # - info: 애플리케이션 정보
-        # - metrics: 메트릭 정보
-        # - env: 환경 변수 (보안 주의)
-        # - beans: Spring Bean 목록
-        # - loggers: 로깅 레벨 조회/변경
-        # - mappings: URL 매핑 정보
-        # - caches: 캐시 정보
         include: health,info,metrics,env,beans,loggers,mappings,caches
       base-path: /actuator
-      # CORS 설정 (프론트엔드에서 Actuator 접근 허용)
       cors:
         allowed-origins: http://localhost:3000
         allowed-methods: GET,POST
-    # JMX 엔드포인트 비활성화 (웹만 사용)
     jmx:
       exposure:
         exclude: "*"
 
-  # ===== 개별 엔드포인트 설정 =====
   endpoint:
-    # Health 엔드포인트 상세 설정
     health:
-      show-details: when-authorized  # 인증된 사용자에게만 상세 정보
-      show-components: always        # 컴포넌트 상태 항상 표시
+      show-details: when-authorized
+      show-components: always
       probes:
-        enabled: true                # Kubernetes 프로브 지원
+        enabled: true
       group:
-        # 라이브니스 프로브 그룹 (애플리케이션 생존 여부)
         liveness:
           include: livenessState
           show-details: always
-        # 레디니스 프로브 그룹 (요청 처리 가능 여부)
         readiness:
           include: readinessState,db
           show-details: always
-
-    # Info 엔드포인트
     info:
       enabled: true
-
-    # Metrics 엔드포인트
     metrics:
       enabled: true
-
-    # Loggers 엔드포인트 (런타임 로그 레벨 변경 가능)
     loggers:
       enabled: true
-
-    # Mappings 엔드포인트 (URL 매핑 정보)
     mappings:
       enabled: true
-
-    # Caches 엔드포인트 (캐시 정보)
     caches:
       enabled: true
 
-  # ===== Health 상태 표시기 설정 =====
   health:
-    # 데이터베이스 상태 체크
     db:
       enabled: true
-    # 디스크 공간 상태 체크
     diskspace:
       enabled: true
-      threshold: 100MB  # 최소 여유 공간 (이하 시 경고)
-    # 라이브니스/레디니스 상태
+      threshold: 100MB
     livenessstate:
       enabled: true
     readinessstate:
       enabled: true
 
-  # ===== 메트릭 설정 =====
   metrics:
-    # 태그 설정 (메트릭 그룹화용)
     tags:
       application: ${spring.application.name}
       environment: development
-    # 웹 요청 메트릭
     web:
       server:
         request:
           autotime:
-            enabled: true           # 자동 시간 측정
-            percentiles: 0.5,0.95,0.99  # 백분위수 (50%, 95%, 99%)
-    # 분포 통계
+            enabled: true
+            percentiles: 0.5,0.95,0.99
     distribution:
       percentiles-histogram:
-        http.server.requests: true  # HTTP 요청 히스토그램
+        http.server.requests: true
+        # 37일차 추가: Hibernate 쿼리 히스토그램
+        hibernate.query.executions: true
       slo:
-        # SLO(Service Level Objective) 경계값
-        # 응답 시간이 이 값들을 기준으로 분류됨
         http.server.requests: 100ms,500ms,1s,5s
+        # 37일차 추가: DB 쿼리 SLO
+        jdbc.connections.acquire: 10ms,50ms,100ms
 
-  # ===== 애플리케이션 정보 노출 설정 =====
+    # 37일차 추가: 활성화할 메트릭 필터
+    enable:
+      # JVM 메트릭
+      jvm: true
+      # 시스템 메트릭
+      system: true
+      # 프로세스 메트릭
+      process: true
+      # JDBC 메트릭
+      jdbc: true
+      # Hibernate 메트릭
+      hibernate: true
+      # HikariCP 메트릭
+      hikaricp: true
+
   info:
     env:
-      enabled: true    # 환경 변수 정보
+      enabled: true
     java:
-      enabled: true    # Java 버전 정보
+      enabled: true
     os:
-      enabled: true    # OS 정보
+      enabled: true
     build:
-      enabled: true    # 빌드 정보
+      enabled: true
     git:
-      enabled: true    # Git 정보
-      mode: full       # 상세 Git 정보 (커밋, 브랜치 등)
+      enabled: true
+      mode: full
 
-# ===== Info 엔드포인트에 표시될 정보 =====
-# GET /actuator/info 호출 시 반환되는 정보
+# ===== Info 엔드포인트 정보 =====
 info:
   app:
     name: ${app.name}
@@ -430,8 +393,8 @@ info:
     java:
       version: ${java.version}
   build:
-    date: "2025-11-27"
-    day: 36
+    date: "2025-11-28"
+    day: 37
     phase: "4단계 - 완성 및 최적화"
   contact:
     email: admin@kmportal.com
@@ -441,67 +404,40 @@ info:
     database: H2/MSSQL
     frontend: Vue 3 + Element Plus
     responsive: true
+    # 37일차 추가
+    query-optimization: enabled
+    slow-query-logging: "100ms"
 
 # ============================================
-# 설정 파일 변경 이력
+# 37일차 추가: 쿼리 성능 모니터링 가이드
 # ============================================
 #
-# [18일차 작업 완료] 2025-11-12
-# - spring.servlet.multipart 설정 확인 및 주석 추가
-# - file.storage.path 설정 설명 추가
-# - 파일 저장 디렉토리 구조 설명 추가
-# - 허용 파일 확장자에 webp, 7z 추가
-# - 19-20일차 구현 예정 옵션 추가
+# 1. 느린 쿼리 확인 방법:
+#    - 애플리케이션 로그에서 "slow query" 검색
+#    - LOG_QUERIES_SLOWER_THAN_MS 값 이상 걸린 쿼리 확인
 #
-# [36일차 작업 완료] 2025-11-27
-# - server.compression 압축 설정 추가 (성능 최적화)
-# - hibernate.generate_statistics 성능 통계 수집 활성화
-# - logging.level에 Actuator 로깅 추가
-# - management 섹션 대폭 확장:
-#   * Health 상태 체크 그룹 설정 (liveness/readiness)
-#   * Metrics 분포 통계 및 SLO 설정
-#   * 개별 엔드포인트 활성화 설정
-#   * CORS 설정 추가
-# - info 섹션 추가 (애플리케이션 상세 정보)
+# 2. Actuator로 확인 가능한 메트릭:
 #
-# ============================================
-# 접근 가능한 Actuator 엔드포인트
-# ============================================
+#    a) Hibernate 통계:
+#       GET /actuator/metrics/hibernate.statements
+#       GET /actuator/metrics/hibernate.query.executions
+#       GET /actuator/metrics/hibernate.sessions.open
 #
-# Health (애플리케이션 상태)
-# - GET /actuator/health           : 전체 상태
-# - GET /actuator/health/liveness  : 라이브니스 프로브
-# - GET /actuator/health/readiness : 레디니스 프로브
+#    b) JDBC 커넥션 풀:
+#       GET /actuator/metrics/hikaricp.connections.active
+#       GET /actuator/metrics/hikaricp.connections.pending
+#       GET /actuator/metrics/hikaricp.connections.acquire
 #
-# Info (애플리케이션 정보)
-# - GET /actuator/info             : 애플리케이션 정보
+#    c) HTTP 요청:
+#       GET /actuator/metrics/http.server.requests
 #
-# Metrics (성능 메트릭)
-# - GET /actuator/metrics          : 메트릭 목록
-# - GET /actuator/metrics/{name}   : 특정 메트릭 상세
-#   예시:
-#   - /actuator/metrics/jvm.memory.used
-#   - /actuator/metrics/http.server.requests
-#   - /actuator/metrics/hikaricp.connections.active
-#   - /actuator/metrics/system.cpu.usage
+# 3. 쿼리 실행 계획 확인 (H2):
+#    EXPLAIN ANALYZE SELECT * FROM boards WHERE is_deleted = false;
 #
-# Loggers (로깅 제어)
-# - GET  /actuator/loggers         : 로거 목록
-# - GET  /actuator/loggers/{name}  : 특정 로거 레벨
-# - POST /actuator/loggers/{name}  : 로그 레벨 변경
-#   예시: POST /actuator/loggers/com.kmportal.backend
-#         Body: {"configuredLevel": "DEBUG"}
+# 4. 인덱스 확인 (H2):
+#    SELECT * FROM INFORMATION_SCHEMA.INDEXES WHERE TABLE_NAME = 'BOARDS';
 #
-# Mappings (URL 매핑)
-# - GET /actuator/mappings         : 모든 URL 매핑 정보
-#
-# Caches (캐시)
-# - GET /actuator/caches           : 캐시 정보
-#
-# Environment (환경 변수)
-# - GET /actuator/env              : 환경 변수
-#
-# Beans (Spring Bean)
-# - GET /actuator/beans            : 등록된 Bean 목록
+# 5. 통계 초기화 (테스트용):
+#    Hibernate Session Factory에서 statistics.clear() 호출
 #
 # ============================================

@@ -20,14 +20,106 @@ import lombok.NoArgsConstructor;
  * 3. 파일 카테고리 관리
  * 4. 생성일시/수정일시 자동 관리 (BaseEntity 상속)
  *
+ * ==== 37일차 업데이트: 쿼리 최적화 ====
+ * 1. 사용자별 파일 조회 최적화 인덱스
+ * 2. 파일 검색 최적화 인덱스
+ * 3. 카테고리/타입별 필터링 최적화
+ *
  * 작성일: 2025년 11월 12일 (18일차)
- * 수정일: 2025년 11월 13일 (19일차) - @EqualsAndHashCode 추가
- * 작성자: 18일차 개발 담당자
+ * 수정일: 2025년 11월 28일 (37일차 - 인덱스 최적화)
+ * 작성자: KM Portal Dev Team
+ *
+ * @author KM Portal Dev Team
+ * @version 1.1 (37일차 인덱스 최적화)
+ * @since 2025-11-12
  */
 @Entity
-@Table(name = "files")
+@Table(name = "files",
+        indexes = {
+                // ======================================
+                // 기존 단일 컬럼 인덱스
+                // ======================================
+
+                /**
+                 * 업로더별 파일 조회 인덱스
+                 */
+                @Index(name = "idx_file_uploader", columnList = "user_id"),
+
+                /**
+                 * 원본 파일명 검색 인덱스
+                 */
+                @Index(name = "idx_file_original_name", columnList = "original_name"),
+
+                // ======================================
+                // 37일차 추가: 복합 인덱스 (쿼리 패턴 최적화)
+                // ======================================
+
+                /**
+                 * 복합 인덱스 1: 삭제되지 않은 파일 + 생성일시 (기본 목록)
+                 *
+                 * 최적화 대상 쿼리:
+                 * SELECT * FROM files
+                 * WHERE is_deleted = false
+                 * ORDER BY created_at DESC
+                 *
+                 * 사용 빈도: 높음 (파일 목록 기본 조회)
+                 */
+                @Index(name = "idx_file_active_created",
+                        columnList = "is_deleted, created_at DESC"),
+
+                /**
+                 * 복합 인덱스 2: 사용자별 삭제되지 않은 파일
+                 *
+                 * 최적화 대상 쿼리:
+                 * SELECT * FROM files
+                 * WHERE user_id = ? AND is_deleted = false
+                 * ORDER BY created_at DESC
+                 *
+                 * 사용 빈도: 높음 (내 파일 목록)
+                 */
+                @Index(name = "idx_file_user_active_created",
+                        columnList = "user_id, is_deleted, created_at DESC"),
+
+                /**
+                 * 복합 인덱스 3: 카테고리별 삭제되지 않은 파일
+                 *
+                 * 최적화 대상 쿼리:
+                 * SELECT * FROM files
+                 * WHERE category = ? AND is_deleted = false
+                 * ORDER BY created_at DESC
+                 *
+                 * 사용 빈도: 중간 (카테고리별 필터링)
+                 */
+                @Index(name = "idx_file_category_active",
+                        columnList = "category, is_deleted, created_at DESC"),
+
+                /**
+                 * 복합 인덱스 4: MIME 타입별 파일
+                 *
+                 * 최적화 대상 쿼리:
+                 * SELECT * FROM files
+                 * WHERE content_type LIKE 'image/%' AND is_deleted = false
+                 *
+                 * 사용 빈도: 중간 (이미지 파일만 필터링 등)
+                 */
+                @Index(name = "idx_file_content_type",
+                        columnList = "content_type, is_deleted"),
+
+                /**
+                 * 복합 인덱스 5: 공개 파일 목록
+                 *
+                 * 최적화 대상 쿼리:
+                 * SELECT * FROM files
+                 * WHERE is_public = true AND is_deleted = false
+                 * ORDER BY created_at DESC
+                 *
+                 * 사용 빈도: 중간 (공개 파일 조회)
+                 */
+                @Index(name = "idx_file_public_active",
+                        columnList = "is_public, is_deleted, created_at DESC")
+        })
 @Data
-@EqualsAndHashCode(callSuper = false)  // ✅ 추가: BaseEntity 상속 시 경고 제거
+@EqualsAndHashCode(callSuper = false)
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -35,7 +127,6 @@ public class File extends BaseEntity {
 
     /**
      * 파일 ID (Primary Key)
-     * 자동 증가 방식으로 생성됩니다.
      */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -43,20 +134,13 @@ public class File extends BaseEntity {
 
     /**
      * 원본 파일명
-     * 사용자가 업로드한 파일의 원래 이름입니다.
-     * 예: "프로젝트_계획서.pdf", "회의록_2025_11.docx"
-     *
      * NULL 허용 안 함, 최대 255자
      */
     @Column(nullable = false, length = 255)
     private String originalName;
 
     /**
-     * 저장된 파일명
-     * 서버에 실제로 저장되는 파일명입니다.
-     * 파일명 중복을 방지하기 위해 UUID를 사용합니다.
-     * 예: "a3f2b9c1-4d5e-6f7g-8h9i-0j1k2l3m4n5o.pdf"
-     *
+     * 저장된 파일명 (UUID)
      * NULL 허용 안 함, 최대 255자
      */
     @Column(nullable = false, length = 255)
@@ -64,10 +148,6 @@ public class File extends BaseEntity {
 
     /**
      * 파일 경로
-     * 파일이 저장된 전체 경로입니다.
-     * 연도/월별로 자동 분류됩니다.
-     * 예: "/uploads/2025/11/a3f2b9c1-4d5e-6f7g-8h9i-0j1k2l3m4n5o.pdf"
-     *
      * NULL 허용 안 함, 최대 500자
      */
     @Column(nullable = false, length = 500)
@@ -75,14 +155,6 @@ public class File extends BaseEntity {
 
     /**
      * 파일 크기 (bytes)
-     * 파일의 바이트 크기를 저장합니다.
-     * Long 타입을 사용하여 큰 파일도 지원합니다.
-     *
-     * 예시:
-     * - 1KB = 1,024 bytes
-     * - 1MB = 1,048,576 bytes
-     * - 10MB = 10,485,760 bytes
-     *
      * NULL 허용 안 함
      */
     @Column(nullable = false)
@@ -90,16 +162,6 @@ public class File extends BaseEntity {
 
     /**
      * MIME 타입 (Content Type)
-     * 파일의 형식을 나타냅니다.
-     * 다운로드 시 브라우저가 파일을 올바르게 처리하는 데 필요합니다.
-     *
-     * 예시:
-     * - "image/jpeg" : JPG 이미지
-     * - "image/png" : PNG 이미지
-     * - "application/pdf" : PDF 문서
-     * - "application/vnd.ms-excel" : Excel 파일
-     * - "application/msword" : Word 문서
-     *
      * NULL 허용 안 함, 최대 100자
      */
     @Column(nullable = false, length = 100)
@@ -107,15 +169,6 @@ public class File extends BaseEntity {
 
     /**
      * 파일 카테고리
-     * 파일을 분류하기 위한 카테고리입니다.
-     *
-     * 예시:
-     * - "DOCUMENT" : 문서 파일
-     * - "IMAGE" : 이미지 파일
-     * - "SPREADSHEET" : 스프레드시트
-     * - "PRESENTATION" : 프레젠테이션
-     * - "ETC" : 기타
-     *
      * NULL 허용, 최대 50자
      */
     @Column(length = 50)
@@ -123,9 +176,6 @@ public class File extends BaseEntity {
 
     /**
      * 파일 설명
-     * 파일에 대한 간단한 설명이나 메모입니다.
-     * 사용자가 직접 입력할 수 있습니다.
-     *
      * NULL 허용, 최대 500자
      */
     @Column(length = 500)
@@ -133,14 +183,7 @@ public class File extends BaseEntity {
 
     /**
      * 업로드한 사용자
-     * 이 파일을 업로드한 사용자입니다.
-     * User 엔티티와 다대일(ManyToOne) 관계입니다.
-     *
-     * 지연 로딩(LAZY)을 사용하여 성능을 최적화합니다.
-     * - LAZY: 파일 정보를 조회할 때 사용자 정보는 실제로 필요할 때만 조회
-     * - EAGER: 파일 정보를 조회할 때 사용자 정보도 함께 조회 (비권장)
-     *
-     * NULL 허용 안 함
+     * LAZY 로딩
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
@@ -148,8 +191,7 @@ public class File extends BaseEntity {
 
     /**
      * 다운로드 횟수
-     * 파일이 다운로드된 횟수를 추적합니다.
-     * 기본값은 0입니다.
+     * 기본값 0
      */
     @Column(nullable = false)
     @Builder.Default
@@ -157,11 +199,7 @@ public class File extends BaseEntity {
 
     /**
      * 공개 여부
-     * 파일의 공개/비공개 상태를 나타냅니다.
-     * - true: 모든 사용자가 다운로드 가능
-     * - false: 업로드한 사용자와 관리자만 다운로드 가능
-     *
-     * 기본값은 false (비공개)입니다.
+     * 기본값 false
      */
     @Column(nullable = false)
     @Builder.Default
@@ -169,23 +207,16 @@ public class File extends BaseEntity {
 
     /**
      * 삭제 여부
-     * 파일의 삭제 상태를 나타냅니다.
-     * Soft Delete 방식을 사용합니다.
-     * - true: 삭제됨 (실제 파일은 남아있지만 목록에 표시 안 됨)
-     * - false: 정상 상태
-     *
-     * 기본값은 false (정상)입니다.
+     * 기본값 false
      */
     @Column(nullable = false)
     @Builder.Default
     private Boolean isDeleted = false;
 
+    // ====== 비즈니스 메서드 ======
+
     /**
      * 파일 확장자 추출 메서드
-     * originalName에서 확장자를 추출합니다.
-     *
-     * @return 파일 확장자 (예: "pdf", "jpg", "docx")
-     *         확장자가 없으면 빈 문자열 반환
      */
     public String getFileExtension() {
         if (originalName == null || !originalName.contains(".")) {
@@ -195,9 +226,7 @@ public class File extends BaseEntity {
     }
 
     /**
-     * 파일 크기를 읽기 쉬운 형식으로 반환하는 메서드
-     *
-     * @return 사람이 읽기 쉬운 파일 크기 (예: "1.5 MB", "320 KB")
+     * 파일 크기를 읽기 쉬운 형식으로 반환
      */
     public String getReadableFileSize() {
         if (fileSize == null) {
@@ -216,20 +245,77 @@ public class File extends BaseEntity {
     }
 
     /**
-     * 이미지 파일 여부 확인 메서드
-     *
-     * @return 이미지 파일이면 true, 아니면 false
+     * 이미지 파일 여부 확인
      */
     public boolean isImage() {
         return contentType != null && contentType.startsWith("image/");
     }
 
     /**
-     * PDF 파일 여부 확인 메서드
-     *
-     * @return PDF 파일이면 true, 아니면 false
+     * PDF 파일 여부 확인
      */
     public boolean isPdf() {
         return contentType != null && contentType.equals("application/pdf");
     }
+
+    /**
+     * 다운로드 횟수 증가
+     */
+    public void increaseDownloadCount() {
+        this.downloadCount += 1;
+    }
+
+    /**
+     * 파일 삭제 처리 (Soft Delete)
+     */
+    public void softDelete() {
+        this.isDeleted = true;
+        super.softDelete();
+    }
+
+    /**
+     * 파일 복구
+     */
+    public void restore() {
+        this.isDeleted = false;
+        super.restore();
+    }
+
+    /**
+     * 업로더 ID 조회 편의 메서드
+     */
+    public Long getUploaderId() {
+        return this.uploadedBy != null ? this.uploadedBy.getUserId() : null;
+    }
+
+    /**
+     * 업로더 이름 조회 편의 메서드
+     */
+    public String getUploaderName() {
+        return this.uploadedBy != null ? this.uploadedBy.getFullName() : "알 수 없음";
+    }
 }
+
+/*
+ * ====== 37일차 파일 시스템 쿼리 최적화 가이드 ======
+ *
+ * 1. 파일 시스템 특성:
+ *    - 파일 메타데이터만 DB에 저장 (실제 파일은 파일 시스템)
+ *    - 검색 빈도: 목록 조회 > 상세 조회 > 다운로드
+ *    - 사용자별 파일 분리 (내 파일 / 공개 파일)
+ *
+ * 2. 인덱스 설계 고려사항:
+ *    - 파일명 LIKE 검색: 인덱스 효과 제한적
+ *    - MIME 타입 필터링: 접두어 검색에는 효과적
+ *    - 대용량 파일 목록: 페이징 필수
+ *
+ * 3. 성능 최적화 팁:
+ *    - 파일 목록 조회 시 필요한 컬럼만 SELECT
+ *    - 썸네일 표시 시 별도 썸네일 경로 저장 고려
+ *    - 파일 크기 합계: SUM(file_size) 집계 쿼리 주의
+ *
+ * 4. 추가 최적화 고려사항:
+ *    - 파일 카테고리 ENUM 타입 변환 (문자열 → 숫자)
+ *    - 파일 해시값 저장 (중복 파일 탐지)
+ *    - 업로드 일시 파티셔닝 (대용량 데이터 시)
+ */
