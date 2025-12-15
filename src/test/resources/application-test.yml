@@ -1,0 +1,254 @@
+# ============================================
+# KM Portal Backend - 테스트 환경 설정
+# ============================================
+# 파일 위치: src/test/resources/application-test.yml
+#
+# 이 파일은 테스트 실행 시 사용되는 설정입니다.
+# @ActiveProfiles("test") 어노테이션으로 활성화됩니다.
+#
+# ⚠️ 원본 application.yml과 호환되도록 설정되었습니다.
+#
+# 작성일: 2025년 11월 29일 (40일차)
+# 수정일: 2025년 11월 29일 (호환성 수정)
+# ============================================
+
+# ===== 서버 설정 =====
+server:
+  port: 8080
+  servlet:
+    context-path: /
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+# ===== Spring 기본 설정 =====
+spring:
+  application:
+    name: km-portal-backend-test
+
+  # ============================================
+  # H2 인메모리 데이터베이스 설정
+  # ============================================
+  # ⚠️ 원본과 동일하게 MODE=MySQL 사용
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=MySQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+    # 커넥션 풀 설정 (테스트용 최소 설정)
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 30000
+      pool-name: TestHikariCP
+
+  # ============================================
+  # JPA 설정
+  # ============================================
+  jpa:
+    # ⚠️ 원본과 동일한 방언 사용
+    database-platform: org.hibernate.dialect.H2Dialect
+
+    # DDL 자동 생성 (테스트 시 테이블 자동 생성/삭제)
+    hibernate:
+      ddl-auto: create-drop
+
+    # 테스트 시 SQL 로깅
+    show-sql: true
+
+    properties:
+      hibernate:
+        # ⚠️ 원본과 동일한 방언
+        dialect: org.hibernate.dialect.H2Dialect
+        # SQL 포맷팅
+        format_sql: true
+        # SQL 주석 표시
+        use_sql_comments: true
+        # 통계 활성화
+        generate_statistics: true
+        # 배치 처리 (원본과 동일)
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+
+    # SQL 초기화 지연 (테스트에서는 비활성화)
+    defer-datasource-initialization: false
+
+  # ============================================
+  # SQL 초기화 설정 (테스트에서는 비활성화)
+  # ============================================
+  sql:
+    init:
+      mode: never  # 테스트에서는 data-dev.sql 실행 안 함
+
+  # ============================================
+  # H2 콘솔 (디버깅용)
+  # ============================================
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  # ============================================
+  # Jackson JSON 설정 (원본과 동일)
+  # ============================================
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+      indent-output: true
+    deserialization:
+      fail-on-unknown-properties: false
+    property-naming-strategy: LOWER_CAMEL_CASE
+    time-zone: Asia/Seoul
+
+  # ============================================
+  # 파일 업로드 설정 (테스트용)
+  # ============================================
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 10MB
+      max-request-size: 20MB
+
+# ============================================
+# JWT 토큰 설정
+# ============================================
+# ⚠️ 원본 application.yml과 동일한 구조 사용
+jwt:
+  # 원본과 동일한 시크릿 키 (테스트 환경)
+  secret: myVerySecretKeyForKMPortal2025!@#$%^&*()_+1234567890
+
+  # ⚠️ 원본과 동일한 키 구조: jwt.expiration.access-token
+  expiration:
+    access-token: 86400000      # 24시간
+    refresh-token: 604800000    # 7일
+
+  # 원본과 동일한 헤더 설정
+  header:
+    authorization: Authorization
+    prefix: "Bearer "
+
+  issuer: km-portal-backend
+
+  refresh:
+    enabled: true
+    auto-refresh-threshold: 300000
+
+# ============================================
+# 보안 설정 (원본과 동일한 구조)
+# ============================================
+security:
+  password:
+    min-length: 4
+    max-length: 100
+    require-uppercase: false
+    require-lowercase: false
+    require-numbers: false
+    require-special: false
+  account-lock:
+    max-failed-attempts: 5
+    lock-duration: 1800
+  cors:
+    allowed-origins:
+      - http://localhost:3000
+    allowed-methods:
+      - GET
+      - POST
+      - PUT
+      - PATCH
+      - DELETE
+      - OPTIONS
+    allowed-headers:
+      - "*"
+    allow-credentials: true
+    max-age: 3600
+
+# ============================================
+# 파일 관리 설정 (테스트용)
+# ============================================
+file:
+  storage:
+    path: ${java.io.tmpdir}/km-portal-test-files
+    allowed-extensions:
+      - jpg
+      - jpeg
+      - png
+      - pdf
+      - doc
+      - docx
+    max-size: 10MB
+    max-total-size: 100MB
+    auto-create-directory: true
+    filename-strategy: uuid
+    duplicate-strategy: rename
+
+# ============================================
+# 애플리케이션 커스텀 설정 (테스트용)
+# ============================================
+app:
+  name: KM 포털 (테스트)
+  version: 1.0.0-TEST
+  description: "테스트 환경"
+  dev:
+    enabled: true
+    create-test-data: false  # 테스트에서는 @BeforeEach로 데이터 생성
+    enable-swagger: false
+    show-sql-queries: true
+  user:
+    default-role: ROLE_USER
+    auto-activate: true
+    require-email-verification: false
+
+# ============================================
+# 로깅 설정 (테스트용)
+# ============================================
+logging:
+  level:
+    root: WARN
+    com.kmportal.backend: DEBUG
+
+    # Hibernate SQL 로깅
+    org.hibernate.SQL: DEBUG
+    # 바인딩 파라미터 로깅 (테스트 시 유용)
+    org.hibernate.orm.jdbc.bind: TRACE
+    # 통계 로깅
+    org.hibernate.stat: DEBUG
+
+    # Spring 테스트
+    org.springframework.test: DEBUG
+    org.springframework.boot.test: DEBUG
+
+    # H2 로깅
+    org.h2: WARN
+
+    # JWT 라이브러리
+    io.jsonwebtoken: DEBUG
+
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+# ============================================
+# Actuator 설정 (테스트에서는 최소화)
+# ============================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+# ============================================
+# Info 엔드포인트 정보
+# ============================================
+info:
+  app:
+    name: ${app.name}
+    version: ${app.version}
+  test:
+    environment: true
+    framework: JUnit 5 + Mockito

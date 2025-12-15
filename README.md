@@ -56,3 +56,8 @@ git reset --hard abc1234
 # 빌드 명령어 #
 
 .\mvnw.cmd spring-boot:run
+
+
+# 테스트 리포트 생성 #
+
+.\mvnw surefire-report:report
