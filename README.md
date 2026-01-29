@@ -61,3 +61,14 @@ git reset --hard abc1234
 # 테스트 리포트 생성 #
 
 .\mvnw surefire-report:report
+
+
+본계정
+
+id : k2377
+
+테스트용 계정
+
+id : test1
+
+km@548200
