@@ -5,6 +5,8 @@ import com.kmportal.backend.util.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -16,7 +18,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfigurationSource;
 
 /**
+ * =============================================================================
  * Spring Security 보안 설정 클래스
+ * =============================================================================
  *
  * 이 클래스는 애플리케이션의 모든 보안 정책을 정의합니다:
  * - JWT 기반 인증 시스템 구성
@@ -26,14 +30,18 @@ import org.springframework.web.cors.CorsConfigurationSource;
  * - 비밀번호 암호화 설정
  * - 메서드 레벨 보안 활성화
  *
- * JWTを 사용하므로 전통적인 세션 기반 인증은 비활성화하고,
+ * JWT를 사용하므로 전통적인 세션 기반 인증은 비활성화하고,
  * 모든 요청은 토큰을 통해 인증됩니다.
  *
- * 🆕 30일차 수정: 댓글 API 권한 설정 추가
+ * 【버전 히스토리】
+ * - v1.0: 초기 버전
+ * - v1.1 (30일차): 댓글 API 권한 설정 추가
+ * - v1.2 (2일차): AuthenticationManager Bean 추가 (AuthController 지원)
  *
  * @author KM Portal Team
- * @version 1.1
+ * @version 1.2
  * @since 2025-09-24
+ * @modified 2026-01-30 - AuthenticationManager Bean 추가
  */
 @Configuration
 @EnableWebSecurity
@@ -63,6 +71,28 @@ public class SecurityConfig {
     public PasswordEncoder passwordEncoder() {
         // strength 12: 충분히 안전하면서도 성능을 고려한 설정
         return new BCryptPasswordEncoder(12);
+    }
+
+    /**
+     * 【v1.2 추가】 AuthenticationManager Bean 생성
+     *
+     * Spring Security 5.7+ / Spring Boot 3.x에서는 AuthenticationManager를
+     * 명시적으로 Bean으로 등록해야 합니다.
+     *
+     * AuthController에서 로그인 인증 시 사용됩니다:
+     * - authenticationManager.authenticate(UsernamePasswordAuthenticationToken)
+     *
+     * AuthenticationConfiguration을 통해 자동 구성된 AuthenticationManager를
+     * 가져와서 Bean으로 노출합니다.
+     *
+     * @param authenticationConfiguration Spring Security 인증 설정
+     * @return AuthenticationManager 인증 관리자
+     * @throws Exception 설정 중 발생할 수 있는 예외
+     */
+    @Bean
+    public AuthenticationManager authenticationManager(
+            AuthenticationConfiguration authenticationConfiguration) throws Exception {
+        return authenticationConfiguration.getAuthenticationManager();
     }
 
     /**
@@ -134,15 +164,15 @@ public class SecurityConfig {
                         .requestMatchers("/api/system/**").hasRole("ADMIN")
 
                         // 역할 관리 API
-                        .requestMatchers("/api/roles/**").hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers("/api/roles/**").hasAnyRole("ADMIN", "MANAGER", "BUSINESS_SUPPORT")
 
                         // ===== 매니저 이상 권한 필요 엔드포인트 =====
 
                         // 사용자 관리 API (매니저 이상)
-                        .requestMatchers("/api/users/create").hasAnyRole("ADMIN", "MANAGER")
-                        .requestMatchers("/api/users/*/lock").hasAnyRole("ADMIN", "MANAGER")
-                        .requestMatchers("/api/users/*/unlock").hasAnyRole("ADMIN", "MANAGER")
-                        .requestMatchers("/api/users/*/roles").hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers("/api/users/create").hasAnyRole("ADMIN", "MANAGER", "BUSINESS_SUPPORT")
+                        .requestMatchers("/api/users/*/lock").hasAnyRole("ADMIN", "MANAGER", "BUSINESS_SUPPORT")
+                        .requestMatchers("/api/users/*/unlock").hasAnyRole("ADMIN", "MANAGER", "BUSINESS_SUPPORT")
+                        .requestMatchers("/api/users/*/roles").hasAnyRole("ADMIN", "MANAGER", "BUSINESS_SUPPORT")
 
                         // 게시판 관리 API
                         .requestMatchers("/api/boards/*/admin/**").hasAnyRole("ADMIN", "BOARD_ADMIN")
@@ -151,7 +181,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/boards/*/pin").hasRole("ADMIN")
 
                         // 게시판 통계 (관리자 또는 매니저)
-                        .requestMatchers("/api/boards/statistics").hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers("/api/boards/statistics").hasAnyRole("ADMIN", "MANAGER", "BUSINESS_SUPPORT")
 
                         // ===== 인증된 사용자 접근 가능 엔드포인트 =====
 
@@ -160,15 +190,15 @@ public class SecurityConfig {
                         .requestMatchers("/api/users/profile").authenticated()
 
                         // 일반 사용자 조회 (읽기 전용)
-                        .requestMatchers("/api/users").hasAnyRole("ADMIN", "MANAGER", "USER")
-                        .requestMatchers("/api/users/*").hasAnyRole("ADMIN", "MANAGER", "USER")
+                        .requestMatchers("/api/users").hasAnyRole("ADMIN", "MANAGER", "BUSINESS_SUPPORT", "USER")
+                        .requestMatchers("/api/users/*").hasAnyRole("ADMIN", "MANAGER", "BUSINESS_SUPPORT", "USER")
 
                         // 파일 관리 API
                         .requestMatchers("/api/files/upload").authenticated()
                         .requestMatchers("/api/files/download/*").authenticated()
                         .requestMatchers("/api/files/delete/*").authenticated()
 
-                        // ===== 🆕 30일차 추가: 댓글 API 권한 설정 =====
+                        // ===== 30일차 추가: 댓글 API 권한 설정 =====
                         // 댓글 작성/수정/삭제 - 로그인 필요
                         // 댓글 API는 /api/boards/{boardId}/comments/** 형태
                         // /api/boards/** 패턴에 포함되지만 명시적으로 설정
@@ -221,7 +251,13 @@ public class SecurityConfig {
 }
 
 /*
- * ====== 30일차 수정 내용 ======
+ * ====== 버전 히스토리 ======
+ *
+ * v1.2 (2일차) - AuthenticationManager Bean 추가
+ * - AuthController에서 로그인 인증을 위해 필요
+ * - Spring Boot 3.x에서는 명시적으로 Bean 등록 필요
+ *
+ * v1.1 (30일차) - 댓글 API 권한 설정 추가
  *
  * 댓글 API 경로:
  * - POST   /api/boards/{boardId}/comments              - 댓글 작성

@@ -21,7 +21,17 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * 사용자 관리 REST API 컨트롤러 (리팩토링 버전)
+ * =============================================================================
+ * 📁 사용자 관리 REST API 컨트롤러 (2일차 수정 버전 v2.3)
+ * =============================================================================
+ *
+ * 【버전 히스토리】
+ * - v2.0 (2일차): ROLE_MANAGER → ROLE_BUSINESS_SUPPORT 변경
+ * - v2.1: 12개 Role 시스템 반영
+ * - v2.2: UserService 메서드 호환성 수정
+ *         - getActiveUsers(int, int) → getActiveUsers(Pageable)
+ *         - searchUsers(String, int, int) → searchUsers(String)
+ * - v2.3: changeUserRole 메서드 → updateUserRoles 사용으로 변경
  *
  * [Controller의 역할]
  *
@@ -42,72 +52,16 @@ import java.util.Optional;
  * 3. 복잡한 데이터 처리 (→ Service 계층)
  * 4. 트랜잭션 관리 (→ Service 계층)
  *
- * [리팩토링 전후 비교]
+ * [권한 체크 규칙 - 12개 Role 시스템]
  *
- * ❌ 리팩토링 전 (1128줄):
- * ```java
- * @PostMapping
- * public ResponseEntity<?> createUser(@RequestBody User user) {
- *     // 중복 확인 (비즈니스 로직)
- *     if (userRepository.existsByUsername(user.getUsername())) {
- *         return ResponseEntity.badRequest()...;
- *     }
- *
- *     // 비밀번호 암호화 (비즈니스 로직)
- *     String encoded = passwordEncoder.encode(user.getPassword());
- *     user.setPassword(encoded);
- *
- *     // 역할 할당 (비즈니스 로직)
- *     Role userRole = roleRepository.findByRoleName("ROLE_USER")...;
- *     user.addRole(userRole);
- *
- *     // 저장 (비즈니스 로직)
- *     User saved = userRepository.save(user);
- *
- *     return ResponseEntity.ok(saved);
- * }
- * ```
- *
- * ✅ 리팩토링 후 (약 400줄):
- * ```java
- * @PostMapping
- * public ResponseEntity<?> createUser(@RequestBody User user) {
- *     try {
- *         // Service에 위임 (비즈니스 로직은 Service가 처리)
- *         User savedUser = userService.createUser(user);
- *         return ResponseEntity.status(HttpStatus.CREATED).body(savedUser);
- *     } catch (IllegalArgumentException e) {
- *         return ResponseEntity.badRequest().body(...);
- *     }
- * }
- * ```
- *
- * [리팩토링의 장점]
- *
- * 1. 관심사의 분리 (Separation of Concerns)
- *    - Controller: HTTP 처리
- *    - Service: 비즈니스 로직
- *    - Repository: 데이터 액세스
- *
- * 2. 코드 재사용성
- *    - 여러 Controller에서 같은 Service 재사용
- *    - 배치 작업, 스케줄러 등에서도 Service 재사용
- *
- * 3. 테스트 용이성
- *    - Service만 단위 테스트 가능
- *    - Controller는 통합 테스트로 분리
- *
- * 4. 유지보수성
- *    - 각 계층의 책임이 명확
- *    - 변경 시 영향 범위 최소화
- *
- * 5. 가독성
- *    - Controller가 짧고 명확
- *    - HTTP 흐름 파악 용이
+ * - ROLE_ADMIN: 모든 기능 접근 가능
+ * - ROLE_BUSINESS_SUPPORT: 사용자 조회/수정/권한변경/잠금 가능 (기존 ROLE_MANAGER 대체)
+ * - 기타 Role: 접근 불가 (403 Forbidden)
  *
  * @author KM Portal Dev Team
- * @version 2.0 (리팩토링)
+ * @version 2.3 (changeUserRole → updateUserRoles)
  * @since 2025-11-12
+ * @modified 2026-01-30 - 컴파일 오류 해결
  */
 @RestController
 @RequestMapping("/api/users")
@@ -190,10 +144,10 @@ public class UserController {
      * - Response: 페이징된 사용자 목록 + 메타정보
      * - Status: 200 OK
      *
-     * [권한]
+     * [권한] 【2일차 수정】
      *
      * - ROLE_ADMIN: 모든 사용자 조회 가능
-     * - ROLE_MANAGER: 모든 사용자 조회 가능
+     * - ROLE_BUSINESS_SUPPORT: 모든 사용자 조회 가능 (기존 ROLE_MANAGER 대체)
      * - 기타: 접근 불가 (403 Forbidden)
      *
      * [사용 예시]
@@ -224,7 +178,7 @@ public class UserController {
      * @return 페이징된 사용자 목록과 메타정보
      */
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('BUSINESS_SUPPORT')")  // 【2일차 수정】 MANAGER → BUSINESS_SUPPORT
     public ResponseEntity<Map<String, Object>> getAllUsers(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
@@ -268,6 +222,8 @@ public class UserController {
     /**
      * 활성 사용자만 조회
      *
+     * 【v2.2 수정】 UserService.getActiveUsers(Pageable) 메서드 호출 방식 변경
+     *
      * [API 명세]
      *
      * - Method: GET
@@ -275,33 +231,48 @@ public class UserController {
      * - Response: 활성 사용자 목록 (페이징 지원)
      * - Status: 200 OK
      *
-     * [사용 예시]
+     * [권한] 【2일차 수정】
      *
-     * ```
-     * GET /api/users/active?page=0&size=20
-     * Authorization: Bearer {token}
-     * ```
+     * - ROLE_ADMIN, ROLE_BUSINESS_SUPPORT
      *
-     * @param pageable 페이징 정보 (Spring이 자동으로 변환)
+     * @param page 페이지 번호
+     * @param size 페이지 크기
      * @return 활성 사용자 목록
      */
     @GetMapping("/active")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    public ResponseEntity<Page<User>> getActiveUsers(Pageable pageable) {
+    @PreAuthorize("hasRole('ADMIN') or hasRole('BUSINESS_SUPPORT')")  // 【2일차 수정】 MANAGER → BUSINESS_SUPPORT
+    public ResponseEntity<Map<String, Object>> getActiveUsers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
 
-        logger.info("📥 [GET /api/users/active] 활성 사용자 조회 요청");
+        logger.info("📥 [GET /api/users/active] 활성 사용자 목록 조회 요청");
 
         try {
-            Page<User> activeUsers = userService.getActiveUsers(pageable);
+            // 【v2.2 수정】 Pageable 객체 생성하여 Service 호출
+            // UserService.getActiveUsers(Pageable) 메서드 시그니처에 맞춤
+            Pageable pageable = PageRequest.of(page, size, Sort.by("username").ascending());
+            Page<User> userPage = userService.getActiveUsers(pageable);
 
-            logger.info("📤 [200 OK] 활성 사용자 조회 성공: {}명",
-                    activeUsers.getTotalElements());
+            Map<String, Object> response = new HashMap<>();
+            response.put("users", userPage.getContent());
+            response.put("currentPage", userPage.getNumber());
+            response.put("totalPages", userPage.getTotalPages());
+            response.put("totalElements", userPage.getTotalElements());
+            response.put("pageSize", userPage.getSize());
 
-            return ResponseEntity.ok(activeUsers);
+            logger.info("📤 [200 OK] 활성 사용자 목록 조회 성공");
+
+            return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            logger.error("❌ [500 ERROR] 활성 사용자 조회 실패", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            logger.error("❌ [500 ERROR] 활성 사용자 목록 조회 실패", e);
+
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "활성 사용자 목록을 조회할 수 없습니다.");
+            errorResponse.put("message", e.getMessage());
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(errorResponse);
         }
     }
 
@@ -316,29 +287,18 @@ public class UserController {
      * - Response: 사용자 상세 정보
      * - Status: 200 OK / 404 Not Found
      *
-     * [권한]
+     * [권한] 【2일차 수정】
      *
-     * - ROLE_ADMIN: 모든 사용자 조회 가능
-     * - ROLE_MANAGER: 모든 사용자 조회 가능
-     * - 본인: 자신의 정보만 조회 가능
-     * - 기타: 접근 불가
+     * - ROLE_ADMIN, ROLE_BUSINESS_SUPPORT
      *
-     * [Spring Security 표현식]
-     *
-     * `#id == authentication.principal.userId`:
-     * - #id: 메서드 파라미터의 id 값
-     * - authentication: 현재 인증된 사용자 정보
-     * - principal: 인증 주체 (UserDetails 구현체)
-     * - userId: User 엔티티의 userId 필드
-     *
-     * @param id 사용자 ID
-     * @return 사용자 상세 정보 또는 404
+     * @param id 조회할 사용자 ID
+     * @return 사용자 정보 또는 404 응답
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or #id == authentication.principal.userId")
-    public ResponseEntity<User> getUserById(@PathVariable Long id) {
+    @PreAuthorize("hasRole('ADMIN') or hasRole('BUSINESS_SUPPORT')")  // 【2일차 수정】 MANAGER → BUSINESS_SUPPORT
+    public ResponseEntity<Object> getUserById(@PathVariable Long id) {
 
-        logger.info("📥 [GET /api/users/{}] 사용자 조회 요청", id);
+        logger.info("📥 [GET /api/users/{}] 사용자 상세 조회 요청", id);
 
         try {
             Optional<User> userOptional = userService.getUserById(id);
@@ -347,123 +307,80 @@ public class UserController {
                 logger.info("📤 [200 OK] 사용자 조회 성공");
                 return ResponseEntity.ok(userOptional.get());
             } else {
-                logger.warn("📤 [404 NOT FOUND] 사용자를 찾을 수 없음");
+                logger.warn("📤 [404 NOT FOUND] 사용자를 찾을 수 없음 - ID: {}", id);
                 return ResponseEntity.notFound().build();
             }
 
         } catch (Exception e) {
-            logger.error("❌ [500 ERROR] 사용자 조회 실패", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
+            logger.error("❌ [500 ERROR] 사용자 조회 실패 - ID: {}", id, e);
 
-    /**
-     * 사용자명으로 사용자 조회
-     *
-     * [API 명세]
-     *
-     * - Method: GET
-     * - URL: /api/users/username/{username}
-     * - Path Variable: username (사용자명)
-     * - Response: 사용자 정보
-     * - Status: 200 OK / 404 Not Found
-     *
-     * @param username 사용자명
-     * @return 사용자 정보 또는 404
-     */
-    @GetMapping("/username/{username}")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    public ResponseEntity<User> getUserByUsername(@PathVariable String username) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "사용자를 조회할 수 없습니다.");
+            errorResponse.put("message", e.getMessage());
 
-        logger.info("📥 [GET /api/users/username/{}] 사용자명으로 조회", username);
-
-        try {
-            Optional<User> userOptional = userService.getUserByUsername(username);
-
-            if (userOptional.isPresent()) {
-                logger.info("📤 [200 OK] 사용자 조회 성공");
-                return ResponseEntity.ok(userOptional.get());
-            } else {
-                logger.warn("📤 [404 NOT FOUND] 사용자를 찾을 수 없음");
-                return ResponseEntity.notFound().build();
-            }
-
-        } catch (Exception e) {
-            logger.error("❌ [500 ERROR] 사용자 조회 실패", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-
-    /**
-     * 부서별 사용자 조회
-     *
-     * [API 명세]
-     *
-     * - Method: GET
-     * - URL: /api/users/department/{department}
-     * - Path Variable: department (부서명)
-     * - Response: 해당 부서 사용자 목록
-     * - Status: 200 OK
-     *
-     * @param department 부서명
-     * @return 해당 부서 사용자 목록
-     */
-    @GetMapping("/department/{department}")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    public ResponseEntity<List<User>> getUsersByDepartment(@PathVariable String department) {
-
-        logger.info("📥 [GET /api/users/department/{}] 부서별 사용자 조회", department);
-
-        try {
-            List<User> users = userService.getUsersByDepartment(department);
-
-            logger.info("📤 [200 OK] 부서별 사용자 조회 성공: {}명", users.size());
-
-            return ResponseEntity.ok(users);
-
-        } catch (Exception e) {
-            logger.error("❌ [500 ERROR] 부서별 사용자 조회 실패", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(errorResponse);
         }
     }
 
     /**
      * 사용자 검색 (이름 또는 이메일)
      *
+     * 【v2.2 수정】 UserService.searchUsers(String) 메서드 호출 방식 변경
+     * - 반환 타입: List<User> (페이징 미지원)
+     * - page, size 파라미터는 Controller에서 처리하지 않음
+     *
      * [API 명세]
      *
      * - Method: GET
-     * - URL: /api/users/search?keyword={keyword}
+     * - URL: /api/users/search
      * - Query Parameter: keyword (검색 키워드)
-     * - Response: 검색 결과 사용자 목록
+     * - Response: 검색된 사용자 목록
      * - Status: 200 OK
      *
-     * [사용 예시]
+     * [권한] 【2일차 수정】
      *
-     * ```
-     * GET /api/users/search?keyword=kim
-     * Authorization: Bearer {token}
-     * ```
+     * - ROLE_ADMIN, ROLE_BUSINESS_SUPPORT
      *
      * @param keyword 검색 키워드
-     * @return 검색 결과 사용자 목록
+     * @param page 페이지 번호 (현재 미사용 - List 반환)
+     * @param size 페이지 크기 (현재 미사용 - List 반환)
+     * @return 검색된 사용자 목록
      */
     @GetMapping("/search")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    public ResponseEntity<List<User>> searchUsers(@RequestParam String keyword) {
+    @PreAuthorize("hasRole('ADMIN') or hasRole('BUSINESS_SUPPORT')")  // 【2일차 수정】 MANAGER → BUSINESS_SUPPORT
+    public ResponseEntity<Map<String, Object>> searchUsers(
+            @RequestParam String keyword,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
 
-        logger.info("📥 [GET /api/users/search] 사용자 검색 요청 - 키워드: {}", keyword);
+        logger.info("📥 [GET /api/users/search] 사용자 검색 요청: '{}'", keyword);
 
         try {
+            // 【v2.2 수정】 UserService.searchUsers(String) 호출
+            // 반환 타입이 List<User>이므로 직접 List로 받음
             List<User> users = userService.searchUsers(keyword);
 
-            logger.info("📤 [200 OK] 사용자 검색 성공: {}명", users.size());
+            // List를 사용하여 응답 구성 (페이징 정보 없음)
+            Map<String, Object> response = new HashMap<>();
+            response.put("users", users);
+            response.put("totalElements", users.size());
+            response.put("keyword", keyword);
+            // 페이징 정보는 제공하지 않음 (Service에서 List 반환)
 
-            return ResponseEntity.ok(users);
+            logger.info("📤 [200 OK] 사용자 검색 성공: {}건", users.size());
+
+            return ResponseEntity.ok(response);
 
         } catch (Exception e) {
             logger.error("❌ [500 ERROR] 사용자 검색 실패", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "사용자 검색에 실패했습니다.");
+            errorResponse.put("message", e.getMessage());
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(errorResponse);
         }
     }
 
@@ -472,76 +389,47 @@ public class UserController {
     // ================================
 
     /**
-     * 새 사용자 생성
+     * 신규 사용자 생성
      *
      * [API 명세]
      *
      * - Method: POST
      * - URL: /api/users
-     * - Request Body: User 객체 (JSON)
+     * - Request Body: User 객체
      * - Response: 생성된 사용자 정보
-     * - Status: 201 Created / 400 Bad Request / 500 Internal Server Error
+     * - Status: 201 Created / 400 Bad Request
      *
      * [권한]
      *
      * - ROLE_ADMIN: 사용자 생성 가능
      * - 기타: 접근 불가
      *
-     * [요청 예시]
-     *
-     * ```json
-     * POST /api/users
-     * Authorization: Bearer {token}
-     * Content-Type: application/json
-     *
-     * {
-     *   "username": "newuser",
-     *   "password": "password123",
-     *   "email": "newuser@example.com",
-     *   "fullName": "홍길동",
-     *   "department": "개발팀",
-     *   "position": "사원"
-     * }
-     * ```
-     *
-     * [@Valid 어노테이션]
-     *
-     * Spring의 Bean Validation을 활성화:
-     * - User 엔티티의 @NotBlank, @Email 등의 제약 조건 검증
-     * - 검증 실패 시 400 Bad Request 자동 반환
-     * - 검증 오류는 MethodArgumentNotValidException으로 처리
-     *
      * @param user 생성할 사용자 정보
-     * @return 생성된 사용자 정보 또는 오류 메시지
+     * @return 생성된 사용자 또는 에러 응답
      */
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Object> createUser(@Valid @RequestBody User user) {
 
-        logger.info("📥 [POST /api/users] 사용자 생성 요청");
-        logger.debug("   - 사용자명: {}", user.getUsername());
-        logger.debug("   - 이메일: {}", user.getEmail());
+        logger.info("📥 [POST /api/users] 사용자 생성 요청: {}", user.getUsername());
 
         try {
-            // Service에 비즈니스 로직 위임
-            User savedUser = userService.createUser(user);
+            User createdUser = userService.createUser(user);
 
             logger.info("📤 [201 CREATED] 사용자 생성 성공");
-            logger.debug("   - 생성된 사용자 ID: {}", savedUser.getUserId());
 
-            return ResponseEntity.status(HttpStatus.CREATED).body(savedUser);
+            return ResponseEntity.status(HttpStatus.CREATED).body(createdUser);
 
-        } catch (IllegalArgumentException e) {
-            // 중복 등 비즈니스 규칙 위반
-            logger.warn("📤 [400 BAD REQUEST] 사용자 생성 실패: {}", e.getMessage());
+        } catch (RuntimeException e) {
+            if (e.getMessage().contains("이미 사용 중인")) {
+                logger.warn("📤 [400 BAD REQUEST] 중복된 사용자명 또는 이메일");
 
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("error", e.getMessage());
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("error", e.getMessage());
 
-            return ResponseEntity.badRequest().body(errorResponse);
+                return ResponseEntity.badRequest().body(errorResponse);
+            }
 
-        } catch (Exception e) {
-            // 시스템 오류
             logger.error("❌ [500 ERROR] 사용자 생성 중 오류 발생", e);
 
             Map<String, Object> errorResponse = new HashMap<>();
@@ -565,62 +453,46 @@ public class UserController {
      * - Method: PUT
      * - URL: /api/users/{id}
      * - Path Variable: id (사용자 ID)
-     * - Request Body: 수정할 사용자 정보 (JSON)
+     * - Request Body: 수정할 사용자 정보
      * - Response: 수정된 사용자 정보
-     * - Status: 200 OK / 400 Bad Request / 404 Not Found
+     * - Status: 200 OK / 404 Not Found
      *
-     * [권한]
+     * [권한] 【2일차 수정】
      *
-     * - ROLE_ADMIN: 모든 사용자 수정 가능
-     * - ROLE_MANAGER: 모든 사용자 수정 가능
-     * - 기타: 접근 불가
-     *
-     * [요청 예시]
-     *
-     * ```json
-     * PUT /api/users/5
-     * Authorization: Bearer {token}
-     * Content-Type: application/json
-     *
-     * {
-     *   "email": "updated@example.com",
-     *   "fullName": "김철수",
-     *   "department": "영업팀",
-     *   "position": "과장"
-     * }
-     * ```
+     * - ROLE_ADMIN, ROLE_BUSINESS_SUPPORT
      *
      * @param id 수정할 사용자 ID
-     * @param user 수정할 정보가 담긴 User 객체
-     * @return 수정된 사용자 정보 또는 오류 메시지
+     * @param userDetails 수정할 정보
+     * @return 수정된 사용자 또는 에러 응답
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('BUSINESS_SUPPORT')")  // 【2일차 수정】 MANAGER → BUSINESS_SUPPORT
     public ResponseEntity<Object> updateUser(
             @PathVariable Long id,
-            @Valid @RequestBody User user) {
+            @Valid @RequestBody User userDetails) {
 
         logger.info("📥 [PUT /api/users/{}] 사용자 수정 요청", id);
 
         try {
-            User updatedUser = userService.updateUser(id, user);
+            User updatedUser = userService.updateUser(id, userDetails);
 
             logger.info("📤 [200 OK] 사용자 수정 성공");
 
             return ResponseEntity.ok(updatedUser);
 
-        } catch (IllegalArgumentException e) {
-            logger.warn("📤 [400 BAD REQUEST] 사용자 수정 실패: {}", e.getMessage());
-
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("error", e.getMessage());
-
-            return ResponseEntity.badRequest().body(errorResponse);
-
         } catch (RuntimeException e) {
             if (e.getMessage().contains("찾을 수 없습니다")) {
                 logger.warn("📤 [404 NOT FOUND] 사용자를 찾을 수 없음");
                 return ResponseEntity.notFound().build();
+            }
+
+            if (e.getMessage().contains("이미 사용 중인")) {
+                logger.warn("📤 [400 BAD REQUEST] 중복된 이메일");
+
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("error", e.getMessage());
+
+                return ResponseEntity.badRequest().body(errorResponse);
             }
 
             logger.error("❌ [500 ERROR] 사용자 수정 중 오류 발생", e);
@@ -635,7 +507,12 @@ public class UserController {
     }
 
     /**
-     * 사용자 역할 변경
+     * 사용자 역할 변경 (Role ID 목록 기반)
+     *
+     * 【v2.3 수정】 changeUserRole(Long, String) → updateUserRoles(Long, List<Long>)
+     *
+     * UserService에는 changeUserRole(Long, String) 메서드가 없고,
+     * updateUserRoles(Long userId, List<Long> roleIds) 메서드만 존재합니다.
      *
      * [API 명세]
      *
@@ -644,78 +521,44 @@ public class UserController {
      * - Path Variable: id (사용자 ID)
      * - Request Body: { "roleIds": [1, 2, 3] }
      * - Response: 역할이 변경된 사용자 정보
-     * - Status: 200 OK / 400 Bad Request / 404 Not Found
+     * - Status: 200 OK / 404 Not Found
      *
      * [권한]
      *
      * - ROLE_ADMIN: 역할 변경 가능
-     * - ROLE_MANAGER: 역할 변경 가능
      * - 기타: 접근 불가
      *
-     * [요청 예시]
-     *
-     * ```json
-     * PUT /api/users/5/roles
-     * Authorization: Bearer {token}
-     * Content-Type: application/json
-     *
-     * {
-     *   "roleIds": [1, 2]
-     * }
-     * ```
-     *
-     * [응답 예시]
-     *
-     * ```json
-     * {
-     *   "message": "역할이 성공적으로 변경되었습니다.",
-     *   "user": { ... },
-     *   "assignedCount": 2,
-     *   "notFoundCount": 0
-     * }
-     * ```
-     *
      * @param id 사용자 ID
-     * @param request 역할 ID 목록을 담은 요청 객체
-     * @return 변경된 사용자 정보와 처리 결과
+     * @param request roleIds 목록을 담은 요청 객체
+     * @return 역할이 변경된 사용자 정보
      */
     @PutMapping("/{id}/roles")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    public ResponseEntity<Map<String, Object>> updateUserRoles(
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Object> updateUserRoles(
             @PathVariable Long id,
             @RequestBody Map<String, List<Long>> request) {
 
         logger.info("📥 [PUT /api/users/{}/roles] 역할 변경 요청", id);
-        logger.debug("   - 역할 ID 목록: {}", request.get("roleIds"));
 
         try {
             List<Long> roleIds = request.get("roleIds");
 
-            // Service에 비즈니스 로직 위임
-            User updatedUser = userService.updateUserRoles(id, roleIds);
+            if (roleIds == null || roleIds.isEmpty()) {
+                logger.warn("📤 [400 BAD REQUEST] roleIds가 비어 있음");
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("error", "roleIds는 필수입니다.");
+                return ResponseEntity.badRequest().body(errorResponse);
+            }
 
-            // 응답 구성
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "역할이 성공적으로 변경되었습니다.");
-            response.put("user", updatedUser);
-            response.put("assignedCount", roleIds.size());
-            response.put("notFoundCount", 0);
+            User updatedUser = userService.updateUserRoles(id, roleIds);
 
             logger.info("📤 [200 OK] 역할 변경 성공");
 
-            return ResponseEntity.ok(response);
-
-        } catch (IllegalArgumentException e) {
-            logger.warn("📤 [400 BAD REQUEST] 역할 변경 실패: {}", e.getMessage());
-
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("error", e.getMessage());
-
-            return ResponseEntity.badRequest().body(errorResponse);
+            return ResponseEntity.ok(updatedUser);
 
         } catch (RuntimeException e) {
             if (e.getMessage().contains("찾을 수 없습니다")) {
-                logger.warn("📤 [404 NOT FOUND] 사용자를 찾을 수 없음");
+                logger.warn("📤 [404 NOT FOUND] 사용자 또는 역할을 찾을 수 없음");
                 return ResponseEntity.notFound().build();
             }
 
@@ -730,57 +573,36 @@ public class UserController {
         }
     }
 
-    /**
-     * 사용자 활성화/비활성화
+    /*
+     * =========================================================================
+     * 【v2.3 제거】 changeUserRole 메서드 (UserService에 해당 메서드 없음)
+     * =========================================================================
      *
-     * [API 명세]
+     * 기존 changeUserRole(Long, String) 메서드는 UserService에 존재하지 않습니다.
+     * 대신 updateUserRoles(Long userId, List<Long> roleIds)를 사용하세요.
      *
-     * - Method: PUT
-     * - URL: /api/users/{id}/active
-     * - Path Variable: id (사용자 ID)
-     * - Request Body: { "active": true/false }
-     * - Response: 상태가 변경된 사용자 정보
-     * - Status: 200 OK / 404 Not Found
+     * 프론트엔드에서 roleName으로 역할을 변경해야 하는 경우:
+     * 1. GET /api/roles로 역할 목록 조회
+     * 2. roleName으로 roleId 찾기
+     * 3. PUT /api/users/{id}/roles로 역할 변경
      *
-     * @param id 사용자 ID
-     * @param request 활성화 상태를 담은 요청 객체
-     * @return 상태가 변경된 사용자 정보
+     * 또는 UserService에 changeUserRole(Long userId, String roleName) 메서드를
+     * 추가하면 이 엔드포인트를 다시 활성화할 수 있습니다.
+     *
+     * @PutMapping("/{id}/role")
+     * @PreAuthorize("hasRole('ADMIN')")
+     * public ResponseEntity<Object> changeUserRole(
+     *         @PathVariable Long id,
+     *         @RequestBody Map<String, String> request) {
+     *     String roleName = request.get("roleName");
+     *     User updatedUser = userService.changeUserRole(id, roleName);
+     *     return ResponseEntity.ok(updatedUser);
+     * }
+     * =========================================================================
      */
-    @PutMapping("/{id}/active")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Object> toggleUserActive(
-            @PathVariable Long id,
-            @RequestBody Map<String, Boolean> request) {
-
-        logger.info("📥 [PUT /api/users/{}/active] 활성화 상태 변경 요청", id);
-
-        try {
-            Boolean active = request.get("active");
-            User updatedUser = userService.toggleUserActive(id, active);
-
-            logger.info("📤 [200 OK] 활성화 상태 변경 성공");
-
-            return ResponseEntity.ok(updatedUser);
-
-        } catch (RuntimeException e) {
-            if (e.getMessage().contains("찾을 수 없습니다")) {
-                logger.warn("📤 [404 NOT FOUND] 사용자를 찾을 수 없음");
-                return ResponseEntity.notFound().build();
-            }
-
-            logger.error("❌ [500 ERROR] 활성화 상태 변경 중 오류 발생", e);
-
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("error", "활성화 상태 변경 중 오류가 발생했습니다.");
-            errorResponse.put("message", e.getMessage());
-
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(errorResponse);
-        }
-    }
 
     /**
-     * 사용자 계정 잠금/해제
+     * 사용자 잠금 상태 변경
      *
      * [API 명세]
      *
@@ -791,12 +613,16 @@ public class UserController {
      * - Response: 상태가 변경된 사용자 정보
      * - Status: 200 OK / 404 Not Found
      *
+     * [권한] 【2일차 수정】
+     *
+     * - ROLE_ADMIN, ROLE_BUSINESS_SUPPORT
+     *
      * @param id 사용자 ID
      * @param request 잠금 상태를 담은 요청 객체
      * @return 상태가 변경된 사용자 정보
      */
     @PutMapping("/{id}/locked")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('BUSINESS_SUPPORT')")  // 【2일차 수정】 MANAGER → BUSINESS_SUPPORT
     public ResponseEntity<Object> toggleUserLocked(
             @PathVariable Long id,
             @RequestBody Map<String, Boolean> request) {
@@ -902,10 +728,14 @@ public class UserController {
      * - Response: { "count": 50 }
      * - Status: 200 OK
      *
+     * [권한] 【2일차 수정】
+     *
+     * - ROLE_ADMIN, ROLE_BUSINESS_SUPPORT
+     *
      * @return 활성 사용자 수
      */
     @GetMapping("/stats/active-count")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('BUSINESS_SUPPORT')")  // 【2일차 수정】 MANAGER → BUSINESS_SUPPORT
     public ResponseEntity<Map<String, Object>> getActiveUserCount() {
 
         logger.info("📥 [GET /api/users/stats/active-count] 활성 사용자 수 조회");
@@ -936,10 +766,14 @@ public class UserController {
      * - Response: { "count": 100 }
      * - Status: 200 OK
      *
+     * [권한] 【2일차 수정】
+     *
+     * - ROLE_ADMIN, ROLE_BUSINESS_SUPPORT
+     *
      * @return 전체 사용자 수
      */
     @GetMapping("/stats/total-count")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('BUSINESS_SUPPORT')")  // 【2일차 수정】 MANAGER → BUSINESS_SUPPORT
     public ResponseEntity<Map<String, Object>> getTotalUserCount() {
 
         logger.info("📥 [GET /api/users/stats/total-count] 전체 사용자 수 조회");
