@@ -1,5 +1,6 @@
 package com.kmportal.backend.service;
 
+import com.kmportal.backend.dto.RoleDto;
 import com.kmportal.backend.entity.Role;
 import com.kmportal.backend.repository.RoleRepository;
 import org.slf4j.Logger;
@@ -12,6 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * 역할 관리 서비스 (RoleService)
@@ -45,10 +47,14 @@ import java.util.Optional;
  * - 여러 Repository 조합하여 복잡한 작업 수행
  * - 도메인 로직 처리 (예: 역할 우선순위 관리)
  * - 트랜잭션 경계 설정
- * - 데이터 변환 및 가공
+ * - 데이터 변환 및 가공 (Entity ↔ DTO)
+ *
+ * [v2.0 업데이트 - 2026-01-29]
+ * - DTO 패턴 적용: 순환 참조 문제 해결
+ * - getAllActiveRolesAsDto() 등 DTO 반환 메서드 추가
  *
  * @author KM Portal Dev Team
- * @version 1.0
+ * @version 2.0
  * @since 2025-11-12
  */
 @Service
@@ -104,12 +110,191 @@ public class RoleService {
     public RoleService(RoleRepository roleRepository) {
         this.roleRepository = roleRepository;
 
-        logger.info("✅ RoleService 초기화 완료");
+        logger.info("✅ RoleService 초기화 완료 (v2.0 - DTO 패턴 적용)");
         logger.debug("   - RoleRepository: {}", roleRepository.getClass().getSimpleName());
     }
 
     // ================================
-    // 조회 메서드 (Read Operations)
+    // DTO 반환 메서드 (순환 참조 해결)
+    // ================================
+
+    /**
+     * 모든 활성 역할 목록을 DTO로 조회 (우선순위 순)
+     *
+     * [순환 참조 해결]
+     * - Role 엔티티 대신 RoleDto 반환
+     * - users 컬렉션 대신 userCount 숫자만 포함
+     * - JSON 직렬화 시 무한 루프 방지
+     *
+     * [사용 예시]
+     * ```java
+     * // Controller에서 호출
+     * List<RoleDto> roles = roleService.getAllActiveRolesAsDto();
+     * return ResponseEntity.ok(roles);
+     * ```
+     *
+     * @return 우선순위 순으로 정렬된 모든 활성 역할 DTO 목록
+     */
+    public List<RoleDto> getAllActiveRolesAsDto() {
+        logger.info("📋 전체 활성 역할 목록 조회 시작 (DTO 반환)");
+
+        try {
+            // 1. Repository에서 엔티티 조회
+            List<Role> roles = roleRepository.findByIsActiveTrueOrderByPriorityAsc();
+
+            // 2. Entity → DTO 변환 (Stream API 사용)
+            List<RoleDto> roleDtos = roles.stream()
+                    .map(RoleDto::from)  // Role → RoleDto 변환
+                    .collect(Collectors.toList());
+
+            logger.info("✅ 전체 활성 역할 목록 조회 성공 (DTO)");
+            logger.info("   - 조회된 역할 수: {}", roleDtos.size());
+
+            return roleDtos;
+
+        } catch (Exception e) {
+            logger.error("❌ 전체 활성 역할 목록 조회 실패 (DTO)", e);
+            throw new RuntimeException("역할 목록 조회 중 오류가 발생했습니다.", e);
+        }
+    }
+
+    /**
+     * 시스템 역할만 DTO로 조회
+     *
+     * @return 시스템 역할 DTO 목록
+     */
+    public List<RoleDto> getSystemRolesAsDto() {
+        logger.info("📋 시스템 역할 목록 조회 시작 (DTO 반환)");
+
+        try {
+            List<Role> systemRoles = roleRepository.findByIsSystemRoleTrueAndIsActiveTrue();
+
+            List<RoleDto> roleDtos = systemRoles.stream()
+                    .map(RoleDto::from)
+                    .collect(Collectors.toList());
+
+            logger.info("✅ 시스템 역할 목록 조회 성공 (DTO)");
+            logger.info("   - 조회된 시스템 역할 수: {}", roleDtos.size());
+
+            return roleDtos;
+
+        } catch (Exception e) {
+            logger.error("❌ 시스템 역할 목록 조회 실패 (DTO)", e);
+            throw new RuntimeException("시스템 역할 조회 중 오류가 발생했습니다.", e);
+        }
+    }
+
+    /**
+     * 사용자 정의 역할만 DTO로 조회
+     *
+     * @return 사용자 정의 역할 DTO 목록
+     */
+    public List<RoleDto> getCustomRolesAsDto() {
+        logger.info("📋 사용자 정의 역할 목록 조회 시작 (DTO 반환)");
+
+        try {
+            List<Role> customRoles = roleRepository.findByIsSystemRoleFalseAndIsActiveTrue();
+
+            List<RoleDto> roleDtos = customRoles.stream()
+                    .map(RoleDto::from)
+                    .collect(Collectors.toList());
+
+            logger.info("✅ 사용자 정의 역할 목록 조회 성공 (DTO)");
+            logger.info("   - 조회된 사용자 정의 역할 수: {}", roleDtos.size());
+
+            return roleDtos;
+
+        } catch (Exception e) {
+            logger.error("❌ 사용자 정의 역할 목록 조회 실패 (DTO)", e);
+            throw new RuntimeException("사용자 정의 역할 조회 중 오류가 발생했습니다.", e);
+        }
+    }
+
+    /**
+     * 특정 역할을 DTO로 조회
+     *
+     * @param id 역할 ID
+     * @return 역할 DTO (없으면 null)
+     */
+    public RoleDto getRoleByIdAsDto(Long id) {
+        logger.info("🔍 역할 상세 조회 시작 (DTO 반환) - ID: {}", id);
+
+        try {
+            Optional<Role> roleOptional = roleRepository.findById(id);
+
+            if (roleOptional.isPresent()) {
+                Role role = roleOptional.get();
+                RoleDto dto = RoleDto.from(role);
+                logger.info("✅ 역할 상세 조회 성공 (DTO) - 역할명: {}", role.getRoleName());
+                return dto;
+            } else {
+                logger.warn("⚠️ 역할을 찾을 수 없음 - ID: {}", id);
+                return null;
+            }
+
+        } catch (Exception e) {
+            logger.error("❌ 역할 상세 조회 실패 (DTO) - ID: {}", id, e);
+            throw new RuntimeException("역할 조회 중 오류가 발생했습니다.", e);
+        }
+    }
+
+    /**
+     * 역할명으로 역할을 DTO로 조회
+     *
+     * @param roleName 역할명
+     * @return 역할 DTO (없으면 null)
+     */
+    public RoleDto getRoleByNameAsDto(String roleName) {
+        logger.info("🔍 역할명으로 조회 시작 (DTO 반환) - 역할명: {}", roleName);
+
+        try {
+            Optional<Role> roleOptional = roleRepository.findByRoleName(roleName);
+
+            if (roleOptional.isPresent()) {
+                Role role = roleOptional.get();
+                RoleDto dto = RoleDto.from(role);
+                logger.info("✅ 역할명으로 조회 성공 (DTO) - ID: {}", role.getRoleId());
+                return dto;
+            } else {
+                logger.warn("⚠️ 역할을 찾을 수 없음 - 역할명: {}", roleName);
+                return null;
+            }
+
+        } catch (Exception e) {
+            logger.error("❌ 역할명으로 조회 실패 (DTO) - 역할명: {}", roleName, e);
+            throw new RuntimeException("역할 조회 중 오류가 발생했습니다.", e);
+        }
+    }
+
+    /**
+     * 역할 검색 결과를 DTO로 반환
+     *
+     * @param keyword 검색 키워드
+     * @return 검색 결과 DTO 목록
+     */
+    public List<RoleDto> searchRolesAsDto(String keyword) {
+        logger.info("🔍 역할 검색 시작 (DTO 반환) - 키워드: {}", keyword);
+
+        try {
+            List<Role> roles = roleRepository.findByDisplayNameContainingIgnoreCase(keyword);
+
+            List<RoleDto> roleDtos = roles.stream()
+                    .map(RoleDto::from)
+                    .collect(Collectors.toList());
+
+            logger.info("✅ 역할 검색 성공 (DTO)");
+            logger.info("   - 검색 결과 수: {}", roleDtos.size());
+
+            return roleDtos;
+
+        } catch (Exception e) {
+            logger.error("❌ 역할 검색 실패 (DTO) - 키워드: {}", keyword, e);
+            throw new RuntimeException("역할 검색 중 오류가 발생했습니다.", e);
+        }
+    }
+
+    // ================================
+    // 조회 메서드 (Read Operations) - 기존 유지
     // ================================
 
     /**
@@ -122,7 +307,9 @@ public class RoleService {
      * - 시스템 역할과 사용자 정의 역할 모두 포함
      *
      * @return 우선순위 순으로 정렬된 모든 활성 역할 목록
+     * @deprecated DTO 버전 사용 권장: {@link #getAllActiveRolesAsDto()}
      */
+    @Deprecated
     public List<Role> getAllActiveRoles() {
         logger.info("📋 전체 활성 역할 목록 조회 시작");
 
@@ -144,14 +331,10 @@ public class RoleService {
     /**
      * 시스템 역할만 조회
      *
-     * [비즈니스 규칙]
-     *
-     * - 시스템 역할만 조회 (isSystemRole = true)
-     * - 활성 역할만 조회 (isActive = true)
-     * - ROLE_ADMIN, ROLE_MANAGER, ROLE_USER 등
-     *
      * @return 시스템 역할 목록
+     * @deprecated DTO 버전 사용 권장: {@link #getSystemRolesAsDto()}
      */
+    @Deprecated
     public List<Role> getSystemRoles() {
         logger.info("📋 시스템 역할 목록 조회 시작");
 
@@ -172,14 +355,10 @@ public class RoleService {
     /**
      * 사용자 정의 역할만 조회
      *
-     * [비즈니스 규칙]
-     *
-     * - 사용자 정의 역할만 조회 (isSystemRole = false)
-     * - 활성 역할만 조회 (isActive = true)
-     * - 관리자가 생성한 커스텀 역할들
-     *
      * @return 사용자 정의 역할 목록
+     * @deprecated DTO 버전 사용 권장: {@link #getCustomRolesAsDto()}
      */
+    @Deprecated
     public List<Role> getCustomRoles() {
         logger.info("📋 사용자 정의 역할 목록 조회 시작");
 
@@ -199,11 +378,6 @@ public class RoleService {
 
     /**
      * 특정 역할 ID로 상세 정보 조회
-     *
-     * [비즈니스 규칙]
-     *
-     * - ID에 해당하는 역할이 없으면 null 반환
-     * - Optional을 사용하여 안전한 null 처리
      *
      * @param id 역할 ID
      * @return 역할 정보 (없으면 null)
@@ -231,11 +405,6 @@ public class RoleService {
 
     /**
      * 역할명으로 역할 조회
-     *
-     * [비즈니스 규칙]
-     *
-     * - 역할명 (예: "ROLE_ADMIN")으로 조회
-     * - 대소문자 구분 (정확히 일치해야 함)
      *
      * @param roleName 역할명
      * @return 역할 정보 (없으면 null)
@@ -268,25 +437,19 @@ public class RoleService {
     /**
      * 역할 검색 (표시명 기준)
      *
-     * [비즈니스 규칙]
-     *
-     * - 표시명(displayName)에서 키워드 검색
-     * - 부분 일치 검색 (LIKE '%keyword%')
-     * - 대소문자 구분 안함
-     *
      * @param keyword 검색 키워드
      * @return 검색 결과 역할 목록
      */
-    public List<Role> searchRolesByDisplayName(String keyword) {
+    public List<Role> searchRoles(String keyword) {
         logger.info("🔍 역할 검색 시작 - 키워드: {}", keyword);
 
         try {
-            List<Role> searchResults = roleRepository
-                    .findByDisplayNameContainingIgnoreCase(keyword);
+            List<Role> roles = roleRepository.findByDisplayNameContainingIgnoreCase(keyword);
 
-            logger.info("✅ 역할 검색 완료 - 결과 수: {}개", searchResults.size());
+            logger.info("✅ 역할 검색 성공");
+            logger.info("   - 검색 결과 수: {}", roles.size());
 
-            return searchResults;
+            return roles;
 
         } catch (Exception e) {
             logger.error("❌ 역할 검색 실패 - 키워드: {}", keyword, e);
@@ -297,23 +460,19 @@ public class RoleService {
     /**
      * 우선순위 범위로 역할 조회
      *
-     * [비즈니스 규칙]
-     *
-     * - 최소 우선순위 ~ 최대 우선순위 범위 내의 역할 조회
-     * - 활성 역할만 조회
-     * - 예: priority BETWEEN 1 AND 50
-     *
      * @param minPriority 최소 우선순위
      * @param maxPriority 최대 우선순위
      * @return 해당 우선순위 범위의 역할 목록
      */
-    public List<Role> getRolesByPriorityRange(Integer minPriority, Integer maxPriority) {
-        logger.info("🔍 우선순위 범위로 역할 조회 시작 - 범위: {} ~ {}", minPriority, maxPriority);
+    public List<Role> getRolesByPriorityRange(int minPriority, int maxPriority) {
+        logger.info("🔍 우선순위 범위 조회 시작 - 범위: {} ~ {}", minPriority, maxPriority);
 
         try {
-            List<Role> roles = roleRepository.findRolesByPriorityRange(minPriority, maxPriority);
+            List<Role> roles = roleRepository.findRolesByPriorityRange(
+                    minPriority, maxPriority);
 
-            logger.info("✅ 우선순위 범위 조회 완료 - 결과 수: {}개", roles.size());
+            logger.info("✅ 우선순위 범위 조회 성공");
+            logger.info("   - 조회된 역할 수: {}", roles.size());
 
             return roles;
 
@@ -324,7 +483,7 @@ public class RoleService {
     }
 
     // ================================
-    // 생성 및 수정 메서드 (Write Operations)
+    // 생성/수정/삭제 메서드 (Write Operations)
     // ================================
 
     /**
@@ -332,75 +491,64 @@ public class RoleService {
      *
      * [비즈니스 규칙]
      *
-     * 1. 역할명 중복 확인 (필수)
-     *    - 역할명이 이미 존재하면 예외 발생
+     * 1. 역할명 중복 검사
+     *    - 같은 역할명이 이미 존재하면 생성 불가
      *
      * 2. 역할명 형식 검증
-     *    - "ROLE_"로 시작해야 함 (Spring Security 규칙)
-     *    - 대문자와 언더스코어만 사용
+     *    - "ROLE_"로 시작해야 함
+     *    - 대문자와 언더스코어만 사용 가능
      *
      * 3. 우선순위 검증
      *    - 1~999 범위 내여야 함
      *
-     * 4. 기본값 설정
-     *    - isActive = true (생성 시 활성 상태)
-     *    - isSystemRole = false (사용자 정의 역할)
-     *
      * @param role 생성할 역할 정보
-     * @return 저장된 역할 정보
-     * @throws IllegalArgumentException 유효성 검증 실패 시
+     * @return 생성된 역할
      */
-    @Transactional  // 쓰기 작업은 트랜잭션 필요
+    @Transactional
     public Role createRole(Role role) {
-        logger.info("➕ 역할 생성 시작");
-        logger.debug("   - 역할명: {}", role.getRoleName());
-        logger.debug("   - 표시명: {}", role.getDisplayName());
-        logger.debug("   - 우선순위: {}", role.getPriority());
+        logger.info("➕ 새 역할 생성 시작 - 역할명: {}", role.getRoleName());
 
         try {
-            // 1. 역할명 중복 확인 (비즈니스 규칙)
+            // 1. 역할명 중복 검사
             if (roleRepository.existsByRoleName(role.getRoleName())) {
                 logger.warn("⚠️ 역할명 중복 - 역할명: {}", role.getRoleName());
                 throw new IllegalArgumentException("이미 존재하는 역할명입니다: " + role.getRoleName());
             }
 
-            // 2. 역할명 형식 검증 (비즈니스 규칙)
+            // 2. 역할명 형식 검증 (ROLE_로 시작)
             if (!role.getRoleName().startsWith("ROLE_")) {
                 logger.warn("⚠️ 역할명 형식 오류 - 역할명: {}", role.getRoleName());
-                throw new IllegalArgumentException("역할명은 ROLE_로 시작해야 합니다.");
+                throw new IllegalArgumentException("역할명은 'ROLE_'로 시작해야 합니다.");
             }
 
-            // 3. 우선순위 검증 (비즈니스 규칙)
+            // 3. 우선순위 검증
             if (role.getPriority() == null || role.getPriority() < 1 || role.getPriority() > 999) {
                 logger.warn("⚠️ 우선순위 범위 오류 - 우선순위: {}", role.getPriority());
                 throw new IllegalArgumentException("우선순위는 1~999 사이여야 합니다.");
             }
 
             // 4. 기본값 설정
-            if (role.getIsActive() == null) {
-                role.setIsActive(true);
-            }
             if (role.getIsSystemRole() == null) {
-                role.setIsSystemRole(false);  // 사용자 정의 역할
+                role.setIsSystemRole(false);  // 사용자 정의 역할로 기본 설정
+            }
+            if (role.getIsActive() == null) {
+                role.setIsActive(true);  // 활성 상태로 기본 설정
             }
 
-            // 5. 역할 저장
+            // 5. 저장
             Role savedRole = roleRepository.save(role);
 
-            logger.info("✅ 역할 생성 성공");
-            logger.info("   - 역할 ID: {}", savedRole.getRoleId());
-            logger.info("   - 역할명: {}", savedRole.getRoleName());
+            logger.info("✅ 새 역할 생성 성공 - ID: {}, 역할명: {}",
+                    savedRole.getRoleId(), savedRole.getRoleName());
 
             return savedRole;
 
         } catch (IllegalArgumentException e) {
-            // 비즈니스 규칙 위반 (클라이언트 오류)
             logger.error("❌ 역할 생성 실패 (유효성 검증) - {}", e.getMessage());
             throw e;
 
         } catch (Exception e) {
-            // 예상치 못한 오류 (서버 오류)
-            logger.error("❌ 역할 생성 실패 (시스템 오류)", e);
+            logger.error("❌ 역할 생성 실패 (시스템 오류) - 역할명: {}", role.getRoleName(), e);
             throw new RuntimeException("역할 생성 중 오류가 발생했습니다.", e);
         }
     }
@@ -410,32 +558,26 @@ public class RoleService {
      *
      * [비즈니스 규칙]
      *
-     * 1. 시스템 역할 수정 제한
-     *    - 시스템 역할(isSystemRole=true)은 수정 불가
-     *    - ROLE_ADMIN, ROLE_MANAGER 등 보호
+     * 1. 시스템 역할의 핵심 정보 수정 제한
+     *    - roleName 변경 불가
+     *    - isSystemRole 변경 불가
      *
-     * 2. 수정 가능 필드
+     * 2. 수정 가능 항목
      *    - displayName (표시명)
      *    - description (설명)
-     *    - priority (우선순위)
-     *
-     * 3. 수정 불가 필드
-     *    - roleName (역할명) - 변경하면 권한 체계 붕괴
-     *    - isSystemRole (시스템 역할 여부) - 보안상 변경 불가
+     *    - priority (우선순위) - 주의 필요
      *
      * @param id 수정할 역할 ID
-     * @param updateInfo 수정할 정보
-     * @return 수정된 역할 정보
-     * @throws IllegalArgumentException 유효성 검증 실패 시
+     * @param updatedRole 수정할 정보
+     * @return 수정된 역할
      */
     @Transactional
-    public Role updateRole(Long id, Role updateInfo) {
-        logger.info("✏️ 역할 수정 시작 - ID: {}", id);
+    public Role updateRole(Long id, Role updatedRole) {
+        logger.info("✏️ 역할 정보 수정 시작 - ID: {}", id);
 
         try {
-            // 1. 기존 역할 조회
+            // 1. 역할 존재 확인
             Optional<Role> existingRoleOptional = roleRepository.findById(id);
-
             if (!existingRoleOptional.isPresent()) {
                 logger.warn("⚠️ 역할을 찾을 수 없음 - ID: {}", id);
                 throw new IllegalArgumentException("역할을 찾을 수 없습니다.");
@@ -443,33 +585,35 @@ public class RoleService {
 
             Role existingRole = existingRoleOptional.get();
 
-            // 2. 시스템 역할 수정 방지 (비즈니스 규칙)
+            // 2. 시스템 역할 수정 제한 검사
             if (existingRole.getIsSystemRole()) {
-                logger.warn("⚠️ 시스템 역할 수정 시도 - 역할명: {}", existingRole.getRoleName());
-                throw new IllegalArgumentException("시스템 역할은 수정할 수 없습니다.");
+                // 시스템 역할의 roleName은 변경 불가
+                if (!existingRole.getRoleName().equals(updatedRole.getRoleName())) {
+                    logger.warn("⚠️ 시스템 역할 이름 변경 시도 차단 - 역할: {}", existingRole.getRoleName());
+                    throw new IllegalArgumentException("시스템 역할의 역할명은 변경할 수 없습니다.");
+                }
             }
 
-            // 3. 수정 가능한 필드만 업데이트
-            if (updateInfo.getDisplayName() != null) {
-                existingRole.setDisplayName(updateInfo.getDisplayName());
+            // 3. 수정 가능 필드 업데이트
+            if (updatedRole.getDisplayName() != null) {
+                existingRole.setDisplayName(updatedRole.getDisplayName());
             }
-            if (updateInfo.getDescription() != null) {
-                existingRole.setDescription(updateInfo.getDescription());
+            if (updatedRole.getDescription() != null) {
+                existingRole.setDescription(updatedRole.getDescription());
             }
-            if (updateInfo.getPriority() != null) {
-                // 우선순위 범위 검증
-                if (updateInfo.getPriority() < 1 || updateInfo.getPriority() > 999) {
+            if (updatedRole.getPriority() != null) {
+                if (updatedRole.getPriority() < 1 || updatedRole.getPriority() > 999) {
                     throw new IllegalArgumentException("우선순위는 1~999 사이여야 합니다.");
                 }
-                existingRole.setPriority(updateInfo.getPriority());
+                existingRole.setPriority(updatedRole.getPriority());
             }
 
-            // 4. 저장 (JPA가 자동으로 UPDATE 쿼리 실행)
-            Role updatedRole = roleRepository.save(existingRole);
+            // 4. 저장
+            Role savedRole = roleRepository.save(existingRole);
 
-            logger.info("✅ 역할 수정 성공 - ID: {}", id);
+            logger.info("✅ 역할 정보 수정 성공 - ID: {}", id);
 
-            return updatedRole;
+            return savedRole;
 
         } catch (IllegalArgumentException e) {
             logger.error("❌ 역할 수정 실패 (유효성 검증) - ID: {}, {}", id, e.getMessage());
@@ -481,30 +625,77 @@ public class RoleService {
         }
     }
 
-    // ================================
-    // 활성화/비활성화 메서드
-    // ================================
-
     /**
-     * 역할 비활성화 (소프트 삭제)
+     * 역할 삭제
      *
      * [비즈니스 규칙]
      *
-     * 1. 시스템 역할 비활성화 금지
-     *    - 시스템 역할은 비활성화 불가
-     *    - 시스템 안정성 보장
+     * 1. 시스템 역할 삭제 불가
+     *    - ROLE_ADMIN, ROLE_MANAGER 등 삭제 방지
      *
-     * 2. 소프트 삭제 방식
-     *    - 실제로 삭제하지 않고 isActive = false로 설정
-     *    - 기존 사용자의 역할 정보는 유지
-     *    - 새로운 사용자에게는 할당 불가
+     * 2. 사용자가 할당된 역할 삭제 불가
+     *    - 먼저 사용자의 역할을 변경해야 함
      *
-     * 3. 연관된 사용자 확인
-     *    - 해당 역할을 가진 사용자가 있어도 비활성화 가능
-     *    - 단, 경고 로그 출력
+     * 3. 비활성화 권장
+     *    - 실제 삭제보다 비활성화 권장
+     *    - 감사(Audit) 추적 가능
+     *
+     * @param id 삭제할 역할 ID
+     */
+    @Transactional
+    public void deleteRole(Long id) {
+        logger.info("🗑️ 역할 삭제 시작 - ID: {}", id);
+
+        try {
+            // 1. 역할 존재 확인
+            Optional<Role> roleOptional = roleRepository.findById(id);
+            if (!roleOptional.isPresent()) {
+                logger.warn("⚠️ 역할을 찾을 수 없음 - ID: {}", id);
+                throw new IllegalArgumentException("역할을 찾을 수 없습니다.");
+            }
+
+            Role role = roleOptional.get();
+
+            // 2. 시스템 역할 삭제 방지
+            if (role.getIsSystemRole()) {
+                logger.warn("⚠️ 시스템 역할 삭제 시도 차단 - 역할: {}", role.getRoleName());
+                throw new IllegalArgumentException("시스템 역할은 삭제할 수 없습니다.");
+            }
+
+            // 3. 사용자 할당 여부 확인
+            long userCount = roleRepository.countUsersByRoleId(id);
+            if (userCount > 0) {
+                logger.warn("⚠️ 사용자가 할당된 역할 삭제 시도 - 역할: {}, 사용자 수: {}",
+                        role.getRoleName(), userCount);
+                throw new IllegalArgumentException(
+                        "이 역할에 할당된 사용자가 " + userCount + "명 있습니다. 먼저 사용자의 역할을 변경해주세요.");
+            }
+
+            // 4. 삭제 실행
+            roleRepository.deleteById(id);
+
+            logger.info("✅ 역할 삭제 성공 - ID: {}, 역할명: {}", id, role.getRoleName());
+
+        } catch (IllegalArgumentException e) {
+            logger.error("❌ 역할 삭제 실패 (비즈니스 규칙) - ID: {}, {}", id, e.getMessage());
+            throw e;
+
+        } catch (Exception e) {
+            logger.error("❌ 역할 삭제 실패 (시스템 오류) - ID: {}", id, e);
+            throw new RuntimeException("역할 삭제 중 오류가 발생했습니다.", e);
+        }
+    }
+
+    /**
+     * 역할 비활성화
+     *
+     * [비즈니스 규칙]
+     *
+     * - 시스템 역할도 비활성화 가능 (단, 권장하지 않음)
+     * - 비활성화된 역할은 새로 할당할 수 없음
+     * - 기존에 할당된 사용자는 유지됨
      *
      * @param id 비활성화할 역할 ID
-     * @throws IllegalArgumentException 비즈니스 규칙 위반 시
      */
     @Transactional
     public void deactivateRole(Long id) {
@@ -521,25 +712,19 @@ public class RoleService {
 
             Role role = roleOptional.get();
 
-            // 2. 시스템 역할 비활성화 방지 (비즈니스 규칙)
+            // 2. 시스템 역할 비활성화 경고
             if (role.getIsSystemRole()) {
-                logger.warn("⚠️ 시스템 역할 비활성화 시도 - 역할명: {}", role.getRoleName());
-                throw new IllegalArgumentException("시스템 역할은 비활성화할 수 없습니다.");
+                logger.warn("⚠️ 시스템 역할 비활성화 - 역할: {} - 이 작업은 시스템에 영향을 줄 수 있습니다.",
+                        role.getRoleName());
             }
 
             // 3. 이미 비활성화된 경우
             if (!role.getIsActive()) {
                 logger.info("ℹ️ 이미 비활성화된 역할 - ID: {}", id);
-                return;  // 중복 처리 방지
+                return;
             }
 
-            // 4. 연관된 사용자 수 확인 (경고 로그)
-            long userCount = roleRepository.countUsersByRoleId(id);
-            if (userCount > 0) {
-                logger.warn("⚠️ 사용자가 할당된 역할을 비활성화합니다 - 사용자 수: {}명", userCount);
-            }
-
-            // 5. 비활성화 실행
+            // 4. 비활성화 실행
             int updatedRows = roleRepository.deactivateRole(id);
 
             if (updatedRows > 0) {
@@ -686,7 +871,7 @@ public class RoleService {
      * - systemRoles: 시스템 역할 수
      * - customRoles: 사용자 정의 역할 수
      * - roleUserStats: 역할별 사용자 수 통계
-     * - emptyRoles: 사용자가 없는 역할 목록
+     * - emptyRoles: 사용자가 없는 역할 목록 (DTO로 변환)
      *
      * @return 역할 통계 정보 Map
      */
@@ -703,8 +888,11 @@ public class RoleService {
             // 2. 역할별 사용자 수 통계
             List<Object[]> roleUserStats = roleRepository.getRoleUserStatistics();
 
-            // 3. 사용자가 없는 역할 조회
-            List<Role> emptyRoles = roleRepository.findRolesWithoutUsers();
+            // 3. 사용자가 없는 역할 조회 (DTO로 변환하여 순환 참조 방지)
+            List<Role> emptyRolesEntity = roleRepository.findRolesWithoutUsers();
+            List<RoleDto> emptyRoles = emptyRolesEntity.stream()
+                    .map(RoleDto::simpleFrom)
+                    .collect(Collectors.toList());
 
             // 4. 통계 정보 구성
             Map<String, Object> statistics = new HashMap<>();

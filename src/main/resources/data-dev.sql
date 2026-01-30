@@ -103,7 +103,7 @@ VALUES ('ROLE_EMPLOYEE', '일반사원', '업무 권한이 아직 부여되지 �
 -- 📌 비밀번호 해시 정보
 -- ============================================
 -- 모든 테스트 계정 비밀번호: password123
--- BCrypt 해시: $2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi
+-- BCrypt 해시: $2a$12$yLYpMe5HjhED3fMrKNOaAONSpQT2WKrMo2w9qbKnt8kX2mQlwapJC
 -- ============================================
 
 -- [1] 관리자 계정 (비밀번호: password123)
@@ -112,56 +112,56 @@ VALUES ('admin', '$2a$12$BnnlnjhGmWb/Gl8jcSElsOZF2U3hfhOq5tifcNqF6./.lKHj5NYny',
 
 -- [2-3] 경영지원 계정 2명
 INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('support01', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', 'support01@kmportal.com', '경영지원1', '경영지원부', '대리', '010-2001-0001', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+VALUES ('support01', '$2a$12$yLYpMe5HjhED3fMrKNOaAONSpQT2WKrMo2w9qbKnt8kX2mQlwapJC', 'support01@kmportal.com', '경영지원1', '경영지원부', '대리', '010-2001-0001', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('support02', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', 'support02@kmportal.com', '경영지원2', '경영지원부', '주임', '010-2001-0002', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+VALUES ('support02', '$2a$12$yLYpMe5HjhED3fMrKNOaAONSpQT2WKrMo2w9qbKnt8kX2mQlwapJC', 'support02@kmportal.com', '경영지원2', '경영지원부', '주임', '010-2001-0002', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- [4-6] 임원 계정 3명
 INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('exec_all', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', 'exec_all@kmportal.com', '임원(1/4종)', '임원실', '이사', '010-3001-0001', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+VALUES ('exec_all', '$2a$12$yLYpMe5HjhED3fMrKNOaAONSpQT2WKrMo2w9qbKnt8kX2mQlwapJC', 'exec_all@kmportal.com', '임원(1/4종)', '임원실', '이사', '010-3001-0001', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('exec_type1', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', 'exec_type1@kmportal.com', '임원(1종)', '임원실', '상무', '010-3001-0002', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+VALUES ('exec_type1', '$2a$12$yLYpMe5HjhED3fMrKNOaAONSpQT2WKrMo2w9qbKnt8kX2mQlwapJC', 'exec_type1@kmportal.com', '임원(1종)', '임원실', '상무', '010-3001-0002', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('exec_type4', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', 'exec_type4@kmportal.com', '임원(4종)', '임원실', '전무', '010-3001-0003', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+VALUES ('exec_type4', '$2a$12$yLYpMe5HjhED3fMrKNOaAONSpQT2WKrMo2w9qbKnt8kX2mQlwapJC', 'exec_type4@kmportal.com', '임원(4종)', '임원실', '전무', '010-3001-0003', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- [7-9] 팀장 계정 3명
 INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('leader_all', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', 'leader_all@kmportal.com', '팀장(1/4종)', '조사1팀', '팀장', '010-4001-0001', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+VALUES ('leader_all', '$2a$12$yLYpMe5HjhED3fMrKNOaAONSpQT2WKrMo2w9qbKnt8kX2mQlwapJC', 'leader_all@kmportal.com', '팀장(1/4종)', '조사1팀', '팀장', '010-4001-0001', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('leader_type1', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', 'leader_type1@kmportal.com', '팀장(1종)', '1종조사팀', '팀장', '010-4001-0002', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+VALUES ('leader_type1', '$2a$12$yLYpMe5HjhED3fMrKNOaAONSpQT2WKrMo2w9qbKnt8kX2mQlwapJC', 'leader_type1@kmportal.com', '팀장(1종)', '1종조사팀', '팀장', '010-4001-0002', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('leader_type4', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', 'leader_type4@kmportal.com', '팀장(4종)', '4종조사팀', '팀장', '010-4001-0003', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+VALUES ('leader_type4', '$2a$12$yLYpMe5HjhED3fMrKNOaAONSpQT2WKrMo2w9qbKnt8kX2mQlwapJC', 'leader_type4@kmportal.com', '팀장(4종)', '4종조사팀', '팀장', '010-4001-0003', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- [10-15] 조사자 계정 6명
 -- 조사자(1/4종) 2명
 INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('invest_all_01', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', 'invest_all_01@kmportal.com', '조사자A(1/4종)', '조사1팀', '과장', '010-5001-0001', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+VALUES ('invest_all_01', '$2a$12$yLYpMe5HjhED3fMrKNOaAONSpQT2WKrMo2w9qbKnt8kX2mQlwapJC', 'invest_all_01@kmportal.com', '조사자A(1/4종)', '조사1팀', '과장', '010-5001-0001', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('invest_all_02', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', 'invest_all_02@kmportal.com', '조사자B(1/4종)', '조사1팀', '대리', '010-5001-0002', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+VALUES ('invest_all_02', '$2a$12$yLYpMe5HjhED3fMrKNOaAONSpQT2WKrMo2w9qbKnt8kX2mQlwapJC', 'invest_all_02@kmportal.com', '조사자B(1/4종)', '조사1팀', '대리', '010-5001-0002', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- 조사자(1종) 2명
 INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('invest_type1_01', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', 'invest_type1_01@kmportal.com', '조사자A(1종)', '1종조사팀', '과장', '010-5002-0001', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+VALUES ('invest_type1_01', '$2a$12$yLYpMe5HjhED3fMrKNOaAONSpQT2WKrMo2w9qbKnt8kX2mQlwapJC', 'invest_type1_01@kmportal.com', '조사자A(1종)', '1종조사팀', '과장', '010-5002-0001', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('invest_type1_02', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', 'invest_type1_02@kmportal.com', '조사자B(1종)', '1종조사팀', '대리', '010-5002-0002', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+VALUES ('invest_type1_02', '$2a$12$yLYpMe5HjhED3fMrKNOaAONSpQT2WKrMo2w9qbKnt8kX2mQlwapJC', 'invest_type1_02@kmportal.com', '조사자B(1종)', '1종조사팀', '대리', '010-5002-0002', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- 조사자(4종) 2명
 INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('invest_type4_01', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', 'invest_type4_01@kmportal.com', '조사자A(4종)', '4종조사팀', '과장', '010-5003-0001', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+VALUES ('invest_type4_01', '$2a$12$yLYpMe5HjhED3fMrKNOaAONSpQT2WKrMo2w9qbKnt8kX2mQlwapJC', 'invest_type4_01@kmportal.com', '조사자A(4종)', '4종조사팀', '과장', '010-5003-0001', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('invest_type4_02', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', 'invest_type4_02@kmportal.com', '조사자B(4종)', '4종조사팀', '대리', '010-5003-0002', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+VALUES ('invest_type4_02', '$2a$12$yLYpMe5HjhED3fMrKNOaAONSpQT2WKrMo2w9qbKnt8kX2mQlwapJC', 'invest_type4_02@kmportal.com', '조사자B(4종)', '4종조사팀', '대리', '010-5003-0002', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- [16] 일반사원 계정 1명
 INSERT INTO users (username, password, email, full_name, department, position, phone_number, is_active, is_locked, password_expired, failed_login_attempts, created_at, updated_at)
-VALUES ('employee01', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', 'employee01@kmportal.com', '일반사원', '총무부', '사원', '010-6001-0001', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+VALUES ('employee01', '$2a$12$yLYpMe5HjhED3fMrKNOaAONSpQT2WKrMo2w9qbKnt8kX2mQlwapJC', 'employee01@kmportal.com', '일반사원', '총무부', '사원', '010-6001-0001', true, false, false, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- ================================
 -- [STEP 6] 사용자-역할 매핑 테이블 데이터
